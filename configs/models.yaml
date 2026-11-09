@@ -1,0 +1,200 @@
+# Every backend speaks the OpenAI chat-completions API, so a model is just
+# a base_url + model_id. Add/remove entries freely; `kabench models` lists them.
+#
+#   ollama    -> http://localhost:11434/v1   (ollama serve)
+#   lmstudio  -> http://localhost:1234/v1    (lms server start)
+#   vllm      -> http://<gpu-host>:8000/v1   (vllm serve <hf-repo>) - needs an NVIDIA GPU
+#
+# hf_tokenizer: a public HF repo containing tokenizer.json, used by the offline
+# tokenization track. Gated repos (google/*, meta-llama/*) need `hf auth login`,
+# so ungated mirrors are used where possible.
+# extra_body: passed through to the server (e.g. to switch thinking off).
+
+models:
+  # ===== Ollama ===========================================================
+  # kb-* are 8k-context aliases created by scripts/make_ollama_aliases.sh
+  # (shared weights). Ollama's 4k default silently truncates long prompts.
+  qwen3-8b:
+    provider: ollama
+    base_url: http://localhost:11434/v1
+    model_id: kb-qwen3-8b
+    hf_tokenizer: Qwen/Qwen3-8B
+    extra_body: {reasoning_effort: none}
+
+  qwen3-8b-q8:
+    provider: ollama
+    base_url: http://localhost:11434/v1
+    model_id: kb-qwen3-8b-q8_0
+    hf_tokenizer: Qwen/Qwen3-8B
+    extra_body: {reasoning_effort: none}
+
+  llama3.1-8b:
+    provider: ollama
+    base_url: http://localhost:11434/v1
+    model_id: kb-llama3.1-8b
+    hf_tokenizer: unsloth/Llama-3.1-8B-Instruct
+
+  llama3.1-8b-q8:
+    provider: ollama
+    base_url: http://localhost:11434/v1
+    model_id: kb-llama3.1-8b-instruct-q8_0
+    hf_tokenizer: unsloth/Llama-3.1-8B-Instruct
+
+  # Multilingual-focused (23 languages). Its HF tokenizer is gated, so the
+  # token track measures it live via the server instead.
+  aya-expanse-8b:
+    provider: ollama
+    base_url: http://localhost:11434/v1
+    model_id: kb-aya-expanse-8b
+
+  aya-expanse-8b-q8:
+    provider: ollama
+    base_url: http://localhost:11434/v1
+    model_id: kb-aya-expanse-8b-q8_0
+
+  # gpt-oss always reasons; "low" is the cheapest setting. Reasoning tokens
+  # count towards max_tokens, hence the higher limit.
+  gpt-oss-20b:
+    provider: ollama
+    base_url: http://localhost:11434/v1
+    model_id: kb-gpt-oss-20b
+    hf_tokenizer: openai/gpt-oss-20b
+    max_tokens: 4096
+    extra_body: {reasoning_effort: low}
+
+  # ===== LM Studio ========================================================
+  # Loaded by scripts/run_queue.sh with an 8k context and --parallel 1. The
+  # model key loads the *selected* variant (4-bit for all of these); the
+  # LM Studio CLI/API can't pick another variant. `reasoning_effort: none`
+  # turns thinking off where the model supports it.
+  nemotron3-nano-4b:
+    provider: lmstudio
+    base_url: http://localhost:1234/v1
+    model_id: nvidia/nemotron-3-nano-4b
+    extra_body: {reasoning_effort: none}
+
+  ministral3-3b:  # Q8_0 (only variant downloaded); no thinking mode
+    provider: lmstudio
+    base_url: http://localhost:1234/v1
+    model_id: mistralai/ministral-3-3b
+
+  gemma4-e4b:
+    provider: lmstudio
+    base_url: http://localhost:1234/v1
+    model_id: google/gemma-4-e4b
+    hf_tokenizer: unsloth/gemma-3-12b-it
+    extra_body: {reasoning_effort: none}
+
+  granite3.2-8b:  # no thinking mode; not trained for tool use
+    provider: lmstudio
+    base_url: http://localhost:1234/v1
+    model_id: ibm/granite-3.2-8b
+
+  gemma4-12b-qat:
+    provider: lmstudio
+    base_url: http://localhost:1234/v1
+    model_id: google/gemma-4-12b-qat
+    hf_tokenizer: unsloth/gemma-3-12b-it
+    extra_body: {reasoning_effort: none}
+
+  # 2-bit quant of a 27B model: compression vs. a smaller model at 4-bit.
+  bonsai-27b-2bit:
+    provider: lmstudio
+    base_url: http://localhost:1234/v1
+    model_id: prism-ml/bonsai-27b
+    extra_body: {reasoning_effort: none}
+
+  lfm2-24b-a2b:
+    provider: lmstudio
+    base_url: http://localhost:1234/v1
+    model_id: liquid/lfm2-24b-a2b
+
+  # ===== Reasoning group ==================================================
+  # Thinking can't be (or is deliberately not) switched off. Run on a fixed
+  # subset (see scripts/run_queue.sh) with a 16k context.
+  qwen3-8b-think:
+    provider: ollama
+    base_url: http://localhost:11434/v1
+    model_id: kb-qwen3-8b-16k
+    hf_tokenizer: Qwen/Qwen3-8B
+    max_tokens: 4096  # thinking past this budget scores as a failure
+
+  qwen3.6-27b-think:  # big model, see the opt-in note in scripts/run_queue.sh
+    provider: lmstudio
+    base_url: http://localhost:1234/v1
+    model_id: qwen/qwen3.6-27b
+    max_tokens: 4096
+
+  deepseek-r1-qwen3-8b:
+    provider: lmstudio
+    base_url: http://localhost:1234/v1
+    model_id: deepseek/deepseek-r1-0528-qwen3-8b
+    max_tokens: 4096  # thinking past this budget scores as a failure
+
+  phi4-mini-reasoning:
+    provider: lmstudio
+    base_url: http://localhost:1234/v1
+    model_id: microsoft/phi-4-mini-reasoning
+    max_tokens: 4096  # thinking past this budget scores as a failure
+
+  phi4-reasoning-plus:
+    provider: lmstudio
+    base_url: http://localhost:1234/v1
+    model_id: microsoft/phi-4-reasoning-plus
+    max_tokens: 4096  # thinking past this budget scores as a failure
+
+  # ===== Not in the queue: need more than 24 GB to run without swapping ====
+  gemma4-26b:
+    provider: ollama
+    base_url: http://localhost:11434/v1
+    model_id: kb-gemma4-26b
+    hf_tokenizer: unsloth/gemma-3-12b-it
+    extra_body: {reasoning_effort: none}
+
+  glm4.7-flash:
+    provider: lmstudio
+    base_url: http://localhost:1234/v1
+    model_id: zai-org/glm-4.7-flash
+    extra_body: {reasoning_effort: none}
+
+  qwen3.6-27b:
+    provider: lmstudio
+    base_url: http://localhost:1234/v1
+    model_id: qwen/qwen3.6-27b
+    extra_body: {reasoning_effort: none}
+
+  qwen3.8-27b:
+    provider: lmstudio
+    base_url: http://localhost:1234/v1
+    model_id: qwen/qwen3.8-27b
+    extra_body: {reasoning_effort: none}
+
+  gemma4-26b-qat:
+    provider: lmstudio
+    base_url: http://localhost:1234/v1
+    model_id: google/gemma-4-26b-a4b-qat
+    hf_tokenizer: unsloth/gemma-3-12b-it
+    extra_body: {reasoning_effort: none}
+
+  devstral-small-2-24b:
+    provider: lmstudio
+    base_url: http://localhost:1234/v1
+    model_id: mistralai/devstral-small-2-2512
+
+  # Example vLLM entry (rented GPU). Uncomment and point at your server.
+  # qwen3-14b-vllm:
+  #   provider: vllm
+  #   base_url: http://YOUR-GPU-HOST:8000/v1
+  #   model_id: Qwen/Qwen3-14B
+  #   hf_tokenizer: Qwen/Qwen3-14B
+  #   extra_body: {chat_template_kwargs: {enable_thinking: false}}
+
+# Tokenizer-only entries for the tokenization track (no server needed).
+tokenizers:
+  qwen3: Qwen/Qwen3-8B
+  gemma3: unsloth/gemma-3-12b-it
+  llama3.1: unsloth/Llama-3.1-8B-Instruct
+  mistral-nemo: unsloth/Mistral-Nemo-Instruct-2407
+  phi4: microsoft/phi-4
+  deepseek-v3: deepseek-ai/DeepSeek-V3
+  gpt-oss: openai/gpt-oss-20b

@@ -1,0 +1,14 @@
+tokenizer,ka_tokens,ka_tokens_per_word,ka_chars_per_token,en_tokens,en_tokens_per_word,en_chars_per_token,ka_en_ratio,model_id
+gpt-oss-20b,10386,2.735,3.118,5822,1.195,5.164,1.784,kb-gpt-oss-20b
+gemma4-26b-qat,13590,3.578,2.383,5821,1.195,5.165,2.335,google/gemma-4-26b-a4b-qat
+gemma4-12b-qat,13590,3.578,2.383,5821,1.195,5.165,2.335,google/gemma-4-12b-qat
+devstral-small-2-24b,14851,3.910,2.180,6050,1.242,4.969,2.455,mistralai/devstral-small-2-2512
+nemotron3-nano-4b,14731,3.879,2.198,5930,1.218,5.070,2.484,nvidia/nemotron-3-nano-4b
+ministral3-3b,14731,3.879,2.198,5930,1.218,5.070,2.484,mistralai/ministral-3-3b
+deepseek-r1-qwen3-8b,32398,8.530,0.999,5974,1.227,5.033,5.423,deepseek/deepseek-r1-0528-qwen3-8b
+qwen3-8b,32338,8.514,1.001,5914,1.214,5.084,5.468,kb-qwen3-8b
+glm4.7-flash,32243,8.489,1.004,5857,1.203,5.133,5.505,zai-org/glm-4.7-flash
+granite3.2-8b,40071,10.551,0.808,6862,1.409,4.381,5.840,ibm/granite-3.2-8b
+aya-expanse-8b,34103,8.979,0.950,5829,1.197,5.158,5.851,kb-aya-expanse-8b
+lfm2-24b-a2b,60266,15.868,0.537,6225,1.278,4.830,9.681,liquid/lfm2-24b-a2b
+llama3.1-8b,59917,15.776,0.540,5853,1.202,5.137,10.237,kb-llama3.1-8b

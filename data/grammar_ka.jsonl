@@ -1,0 +1,59 @@
+{"id": "gec-ka-001", "lang": "ka", "category": "pronoun", "input": "მან მე მომცა წიგნი.", "expected": "მან მე მომცა წიგნი."}
+{"id": "gec-ka-002", "lang": "ka", "category": "pronoun", "input": "მე შენ გხედავ ყოველდღე.", "expected": "მე შენ გხედავ ყოველდღე."}
+{"id": "gec-ka-003", "lang": "ka", "category": "pronoun", "input": "ჩვენ მათ ვუთხარით სიმართლე.", "expected": "ჩვენ მათ ვუთხარით სიმართლე."}
+{"id": "gec-ka-004", "lang": "ka", "category": "pronoun", "input": "თქვენ მათ გაუგზავნეთ წერილი.", "expected": "თქვენ მათ გაუგზავნეთ წერილი."}
+{"id": "gec-ka-005", "lang": "ka", "category": "III_series", "input": "კაცს უნახავს ეს ფილმი.", "expected": "კაცს უნახავს ეს ფილმი."}
+{"id": "gec-ka-006", "lang": "ka", "category": "III_series", "input": "ბავშვს დაუხატავს სურათი.", "expected": "ბავშვს დაუხატავს სურათი."}
+{"id": "gec-ka-007", "lang": "ka", "category": "III_series", "input": "სტუდენტს წაუკითხავს წიგნი.", "expected": "სტუდენტს წაუკითხავს წიგნი."}
+{"id": "gec-ka-008", "lang": "ka", "category": "III_series", "input": "მას უსმენია ეს სიმღერა.", "expected": "მას უსმენია ეს სიმღერა."}
+{"id": "gec-ka-009", "lang": "ka", "category": "III_series", "input": "გოგოს გაუკეთებია საშინაო დავალება.", "expected": "გოგოს გაუკეთებია საშინაო დავალება."}
+{"id": "gec-ka-010", "lang": "ka", "category": "number", "input": "ხუთი ბავშვები მოვიდნენ.", "expected": "ხუთი ბავშვი მოვიდა."}
+{"id": "gec-ka-011", "lang": "ka", "category": "number", "input": "ათი სტუდენტები შეიკრიბნენ.", "expected": "ათი სტუდენტი შეიკრიბა."}
+{"id": "gec-ka-012", "lang": "ka", "category": "number", "input": "ბევრმა ხალხმა მოვიდნენ.", "expected": "ბევრი ხალხი მოვიდა."}
+{"id": "gec-ka-013", "lang": "ka", "category": "number", "input": "ცოტამ ადამიანებმა იცოდნენ.", "expected": "ცოტა ადამიანმა იცოდა."}
+{"id": "gec-ka-014", "lang": "ka", "category": "number", "input": "თითოეულმა სტუდენტებმა მიიღეს ქულები.", "expected": "თითოეულმა სტუდენტმა მიიღო ქულა."}
+{"id": "gec-ka-015", "lang": "ka", "category": "number", "input": "ორმოცი ვაშლები იყო კალათში.", "expected": "ორმოცი ვაშლი იყო კალათში."}
+{"id": "gec-ka-016", "lang": "ka", "category": "number", "input": "სამ-სამი ვაშლები დაურიგეს.", "expected": "სამ-სამი ვაშლი დაურიგეს."}
+{"id": "gec-ka-017", "lang": "ka", "category": "punctuation", "input": "მან თქვა რომ მოვა მაგრამ არ მოვიდა.", "expected": "მან თქვა, რომ მოვა, მაგრამ არ მოვიდა."}
+{"id": "gec-ka-018", "lang": "ka", "category": "punctuation", "input": "თბილისი რომელიც საქართველოს დედაქალაქია ძალიან ლამაზია.", "expected": "თბილისი, რომელიც საქართველოს დედაქალაქია, ძალიან ლამაზია."}
+{"id": "gec-ka-019", "lang": "ka", "category": "punctuation", "input": "ჩვენ წავედით ქალაქში სადაც ბევრი ხალხი იყო.", "expected": "ჩვენ წავედით ქალაქში, სადაც ბევრი ხალხი იყო."}
+{"id": "gec-ka-020", "lang": "ka", "category": "punctuation", "input": "პროექტი რომელიც ჩვენ დავიწყეთ წარმატებული იქნება.", "expected": "პროექტი, რომელიც ჩვენ დავიწყეთ, წარმატებული იქნება."}
+{"id": "gec-ka-022", "lang": "ka", "category": "punctuation", "input": "ავტომობილი როგორიც გუშინ ვიყიდეთ ძალიან სწრაფია.", "expected": "ავტომობილი, როგორიც გუშინ ვიყიდეთ, ძალიან სწრაფია."}
+{"id": "gec-ka-023", "lang": "ka", "category": "ergative", "input": "კაცი დაინახა მეგობარი.", "expected": "კაცმა დაინახა მეგობარი."}
+{"id": "gec-ka-025", "lang": "ka", "category": "ergative", "input": "გოგო წაიკითხა წიგნი.", "expected": "გოგომ წაიკითხა წიგნი."}
+{"id": "gec-ka-026", "lang": "ka", "category": "ergative", "input": "ისინი დაწერეს წერილი.", "expected": "მათ დაწერეს წერილი."}
+{"id": "gec-ka-027", "lang": "ka", "category": "ergative", "input": "სტუდენტი გააკეთა საშინაო დავალება.", "expected": "სტუდენტმა გააკეთა საშინაო დავალება."}
+{"id": "gec-ka-028", "lang": "ka", "category": "agreement", "input": "ბავშვებმა დაინახა კატა და გაიქცნენ.", "expected": "ბავშვებმა დაინახეს კატა და გაიქცნენ."}
+{"id": "gec-ka-029", "lang": "ka", "category": "agreement", "input": "სტუდენტებმა მოისმინა ლექცია და დაწერეს ჩანაწერები.", "expected": "სტუდენტებმა მოისმინეს ლექცია და დაწერეს ჩანაწერები."}
+{"id": "gec-ka-030", "lang": "ka", "category": "agreement", "input": "გოგოებმა დაასრულა პროექტი.", "expected": "გოგოებმა დაასრულეს პროექტი."}
+{"id": "gec-ka-031", "lang": "ka", "category": "tense", "input": "ისინი სახლს აშენებენ წინა წელს.", "expected": "ისინი სახლს აშენებდნენ წინა წელს."}
+{"id": "gec-ka-032", "lang": "ka", "category": "tense", "input": "მე ვწერ წიგნს ხვალ.", "expected": "მე დავწერ წიგნს ხვალ."}
+{"id": "gec-ka-033", "lang": "ka", "category": "orthography", "input": "სჰეცდომა არის სჰესასწორებელი.", "expected": "შეცდომა არის შესასწორებელი."}
+{"id": "gec-ka-034", "lang": "ka", "category": "orthography", "input": "მაგიდაზეზე დევს წიგნი.", "expected": "მაგიდაზე დევს წიგნი."}
+{"id": "gec-ka-035", "lang": "ka", "category": "orthography", "input": "ხმაი უფლისაი.", "expected": "ხმაი უფლისაი."}
+{"id": "gec-ka-036", "lang": "ka", "category": "orthography", "input": "ხმააი უფლისუუა.", "expected": "ხმაი უფლისაი."}
+{"id": "gec-ka-038", "lang": "ka", "category": "archaic", "input": "მისთა მეგობართა.", "expected": "მისთა მეგობართა."}
+{"id": "gec-ka-039", "lang": "ka", "category": "archaic", "input": "შვილთა შვილნი.", "expected": "შვილთა შვილნი."}
+{"id": "gec-ka-040", "lang": "ka", "category": "dative", "input": "მან მისცა ძმა წიგნი.", "expected": "მან მისცა ძმას წიგნი."}
+{"id": "gec-ka-041", "lang": "ka", "category": "dative", "input": "დედამ აჩუქა შვილი სათამაშო.", "expected": "დედამ აჩუქა შვილს სათამაშო."}
+{"id": "gec-ka-042", "lang": "ka", "category": "dative", "input": "მასწავლებელმა უთხრა სტუდენტი პასუხი.", "expected": "მასწავლებელმა უთხრა სტუდენტს პასუხი."}
+{"id": "gec-ka-043", "lang": "ka", "category": "parenthetical", "input": "ეს რა თქმა უნდა სიმართლეა.", "expected": "ეს, რა თქმა უნდა, სიმართლეა."}
+{"id": "gec-ka-044", "lang": "ka", "category": "parenthetical", "input": "ის როგორც ჩანს დაიღალა.", "expected": "ის, როგორც ჩანს, დაიღალა."}
+{"id": "gec-ka-045", "lang": "ka", "category": "parenthetical", "input": "ჩვენ სავარაუდოდ მოვალთ.", "expected": "ჩვენ, სავარაუდოდ, მოვალთ."}
+{"id": "gec-ka-046", "lang": "ka", "category": "conjunction", "input": "არა მხოლოდ ის არამედ მისი ძმაც მოვიდა.", "expected": "არა მხოლოდ ის, არამედ მისი ძმაც მოვიდა."}
+{"id": "gec-ka-047", "lang": "ka", "category": "conjunction", "input": "როგორც ბავშვები ისე მოზრდილებიც თამაშობდნენ.", "expected": "როგორც ბავშვები, ისე მოზრდილებიც თამაშობდნენ."}
+{"id": "gec-ka-048", "lang": "ka", "category": "redundancy", "input": "ჩვენ წავედით ქალაქში სადაც ბევრი ხალხი იყო და და დავისვენეთ.", "expected": "ჩვენ წავედით ქალაქში, სადაც ბევრი ხალხი იყო და დავისვენეთ."}
+{"id": "gec-ka-049", "lang": "ka", "category": "redundancy", "input": "მე მე მინდა წავიდე.", "expected": "მე მინდა წავიდე."}
+{"id": "gec-ka-050", "lang": "ka", "category": "double_negative", "input": "ვერავინ ვერაფერს ვერ დაგვიშავებს.", "expected": "ვერავინ ვერაფერს ვერ დაგვიშავებს."}
+{"id": "gec-ka-051", "lang": "ka", "category": "double_negative", "input": "არსად არავინ არაფერს არ ამბობდა.", "expected": "არსად არავინ არაფერს არ ამბობდა."}
+{"id": "gec-ka-052", "lang": "ka", "category": "double_negative", "input": "არც მე და არც შენ არ წავალთ.", "expected": "არც მე და არც შენ არ წავალთ."}
+{"id": "gec-ka-053", "lang": "ka", "category": "indefinite", "input": "ოდესღაც სადღაც ვიღაცამ მითხრა.", "expected": "ოდესღაც სადღაც ვიღაცამ მითხრა."}
+{"id": "gec-ka-054", "lang": "ka", "category": "indefinite", "input": "რაღაცა მოხდა სადღაცა.", "expected": "რაღაცა მოხდა სადღაცა."}
+{"id": "gec-ka-055", "lang": "ka", "category": "word_order", "input": "ბალახი გათიბა კაცმა.", "expected": "ბალახი გათიბა კაცმა."}
+{"id": "gec-ka-056", "lang": "ka", "category": "word_order", "input": "წიგნი წაიკითხა სტუდენტმა.", "expected": "წიგნი წაიკითხა სტუდენტმა."}
+{"id": "gec-ka-057", "lang": "ka", "category": "superlative", "input": "ეს არის ყველაზე უფრო საუკეთესო ვარიანტი.", "expected": "ეს არის საუკეთესო ვარიანტი."}
+{"id": "gec-ka-058", "lang": "ka", "category": "superlative", "input": "ის ყველაზე უფრო ლამაზია.", "expected": "ის ყველაზე ლამაზია."}
+{"id": "gec-ka-059", "lang": "ka", "category": "misc", "input": "აღარც კი შემოუხედავს.", "expected": "აღარც კი შემოუხედავს."}
+{"id": "gec-ka-060", "lang": "ka", "category": "misc", "input": "ბავშვიები დარბიან ეზოში.", "expected": "ბავშვები დარბიან ეზოში."}
+{"id": "gec-ka-061", "lang": "ka", "category": "misc", "input": "მან მითხრა მოვალო.", "expected": "მან მითხრა, მოვალო."}
+{"id": "gec-ka-062", "lang": "ka", "category": "misc", "input": "მან გაანალიზა რომ მთელი მისი ცხოვრება ფუჭი ყოფილა", "expected": "მან გაანალიზა, რომ მთელი მისი ცხოვრება ფუჭი ყოფილა."}

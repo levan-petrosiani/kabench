@@ -1,0 +1,23 @@
+name: kabench-langfuse
+
+# kabench override: keep the official compose file untouched, but
+#  - don't publish internal-only ports (avoids clashes with a local Postgres/Redis)
+#  - cap memory (~5 GB ceiling, ~4 GB actual) so large local models keep their RAM on a 24 GB Mac
+services:
+  langfuse-web:
+    mem_limit: 2048m
+  langfuse-worker:
+    mem_limit: 768m
+  langfuse-ai-gateway:
+    mem_limit: 128m
+  clickhouse:
+    ports: !reset []
+    mem_limit: 1536m
+  minio:
+    mem_limit: 256m
+  postgres:
+    ports: !reset []
+    mem_limit: 384m
+  redis:
+    ports: !reset []
+    mem_limit: 128m

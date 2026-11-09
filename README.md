@@ -1,0 +1,554 @@
+# kabench: how well do local LLMs handle Georgian?
+
+**kabench** is a reproducible benchmark that compares open-weight LLMs on **Georgian (ქართული) vs English**: the same tasks, in both languages, on local hardware, with every call traced in a self-hosted [Langfuse](https://langfuse.com).
+
+It answers four questions:
+
+| Track | Question | Data | Scoring |
+|---|---|---|---|
+| **A. Grammar** | Can the model proofread Georgian without "fixing" sentences that are already correct? | 59 Georgian + 40 English sentences in 18 error categories, Georgian labels reviewed by a native speaker | exact match, char similarity, edit gain, **over-correction**, missed fixes, output-format compliance |
+| **B. Understanding** | How much reading comprehension is lost in Georgian? | [Belebele](https://huggingface.co/datasets/facebook/belebele): the *same* 100 questions in both languages | accuracy |
+| **C. Token cost** | How many more tokens does the same text cost in Georgian? | 488 parallel FLORES passages | tokens/word, chars/token, **Georgian ÷ English ratio** |
+| **D. Agents** | Does the model behave as well as an agent when the user writes Georgian? | 15 scenarios × 2 languages, mock tools | task success, tool & argument accuracy, clarification, safety rules, prompt-injection resistance, reply language |
+
+## Key findings
+
+**17 open-weight models (3B to 30B), 22 configurations, ~9,500 graded answers**, all run locally on a 24 GB Mac.
+
+![English vs Georgian average score per model](results/charts/overview.png)
+
+- **Every model is worse in Georgian, and English scores hide how much.** The same models average 71–97% in English but 10–85% in Georgian. LFM2 24B scores 87% in English and 10% in Georgian.
+- **Size is not the answer.** Gemma 4 E4B (4B) beats ten larger models in Georgian, and Gemma 4 26B is no better than the 12B. The best Georgian model, Qwen 3.6 27B, still trails its own English score by 12 points.
+- **Georgian costs 1.8–10× more tokens** for the same text, depending on the tokenizer: gpt-oss is cheapest, Llama 3.1 falls back to raw bytes.
+- **Proofreading is the hardest skill.** The best zero-shot exact match in Georgian is 69%, against 95–98% in English. A coding model (Devstral) "fixed" 90% of Georgian sentences that were already correct.
+- **8-bit weights don't help Georgian.** Every Q8 model scored within 3 points of its Q4 version.
+- **Thinking helps small models, and costs more in Georgian.** It raised Qwen3 8B's Georgian Belebele accuracy from 57% to 80%, but added only 2 of 30 questions for Qwen 3.6 27B, which used 1.6× as many thinking tokens per Georgian question as per English one.
+
+Scores are single runs at temperature 0. Every table in the [leaderboard](results/LEADERBOARD.md) carries a 95% confidence interval: with 15 agent scenarios, gaps under ~25 points are within noise.
+
+## Why Georgian
+
+Georgian is spoken by ~4 million people and has its own script (Mkhedruli), which takes **3 bytes per letter in UTF-8**. Its morphology is agglutinative, with split ergativity (the subject's case changes with the verb's tense series). That makes it a hard stress test for both tokenizers and models, and it's rarely benchmarked.
+
+## Headline result: the "Georgian token tax"
+
+The same 488 passages, tokenized in Georgian and in English (results: [`results/tokens_offline.csv`](results/tokens_offline.csv)):
+
+| Tokenizer | Georgian ÷ English tokens | Georgian chars per token |
+|---|---|---|
+| gpt-oss | **1.8×** | 3.04 |
+| Gemma 3 | 2.3× | 2.32 |
+| Mistral Nemo | 2.4× | 2.18 |
+| DeepSeek-V3 | 4.0× | 1.37 |
+| Qwen3 | 5.3× | 1.01 |
+| Phi-4 | 9.9× | 0.55 |
+| Llama 3.1 | **9.9×** | 0.55 |
+
+With Llama 3.1, a Georgian user pays **almost 10× more** for the same content than an English user: in context window, latency and, on hosted APIs, money. At 0.55 characters per token, the tokenizer is falling back to raw bytes: each 3-byte Georgian letter costs about two tokens.
+
+## What the benchmark catches
+
+These are real behaviours from development runs (the full leaderboard is below):
+
+- **The prompt causes the error it forbids.** A few-shot prompt containing *"never change მე → მეს"* made Qwen3 8B rewrite `მე შენ გხედავ` as `მეს შენს გხედავ`. The zero-shot prompt left the sentence alone.
+- **The agent does something instead of asking.** Asked in Georgian to *"message Nino"* with two Ninos in the contacts, Qwen3 8B **created a calendar event**. In English it tried to message without looking up the contact.
+- **Skipped steps in Georgian.** For *"text Giorgi I'll be late"*, the English agent searched the contacts and then sent the message. In Georgian it invented a contact id (`გიორგის_კონტაქტიდ`) and skipped the lookup.
+- **Translating instead of correcting.** Nemotron 3 Nano answered a Georgian proofreading request with an English translation.
+- **Compression damage.** A 2-bit 27B model echoed the instruction back instead of correcting the sentence.
+
+## Results
+
+<!-- leaderboard:start -->
+
+_Generated by `kabench report`. Latest run per model/lang/variant._
+
+## Tokenization cost (offline, 488 parallel FLORES passages)
+
+![token tax](results/charts/token_tax.png)
+
+| tokenizer    |   ka_en_ratio |   ka_chars_per_token |   en_chars_per_token |   ka_tokens_per_word |   en_tokens_per_word |
+|:-------------|--------------:|---------------------:|---------------------:|---------------------:|---------------------:|
+| gpt-oss      |          1.78 |                 3.04 |                 4.95 |                 2.76 |                 1.22 |
+| gemma3       |          2.31 |                 2.32 |                 4.89 |                 3.62 |                 1.24 |
+| mistral-nemo |          2.40 |                 2.18 |                 4.77 |                 3.86 |                 1.27 |
+| deepseek-v3  |          3.95 |                 1.37 |                 4.92 |                 6.16 |                 1.23 |
+| qwen3        |          5.25 |                 1.01 |                 4.81 |                 8.36 |                 1.26 |
+| phi4         |          9.85 |                 0.55 |                 4.90 |                15.42 |                 1.24 |
+| llama3.1     |          9.85 |                 0.55 |                 4.90 |                15.42 |                 1.24 |
+
+### Tokenization measured on the serving backend
+
+| tokenizer            | model_id                           |   ka_en_ratio |   ka_chars_per_token |   en_chars_per_token |
+|:---------------------|:-----------------------------------|--------------:|---------------------:|---------------------:|
+| gpt-oss-20b          | kb-gpt-oss-20b                     |          1.78 |                 3.12 |                 5.16 |
+| gemma4-26b-qat       | google/gemma-4-26b-a4b-qat         |          2.33 |                 2.38 |                 5.17 |
+| gemma4-12b-qat       | google/gemma-4-12b-qat             |          2.33 |                 2.38 |                 5.17 |
+| devstral-small-2-24b | mistralai/devstral-small-2-2512    |          2.46 |                 2.18 |                 4.97 |
+| nemotron3-nano-4b    | nvidia/nemotron-3-nano-4b          |          2.48 |                 2.20 |                 5.07 |
+| ministral3-3b        | mistralai/ministral-3-3b           |          2.48 |                 2.20 |                 5.07 |
+| deepseek-r1-qwen3-8b | deepseek/deepseek-r1-0528-qwen3-8b |          5.42 |                 1.00 |                 5.03 |
+| qwen3-8b             | kb-qwen3-8b                        |          5.47 |                 1.00 |                 5.08 |
+| glm4.7-flash         | zai-org/glm-4.7-flash              |          5.50 |                 1.00 |                 5.13 |
+| granite3.2-8b        | ibm/granite-3.2-8b                 |          5.84 |                 0.81 |                 4.38 |
+| aya-expanse-8b       | kb-aya-expanse-8b                  |          5.85 |                 0.95 |                 5.16 |
+| lfm2-24b-a2b         | liquid/lfm2-24b-a2b                |          9.68 |                 0.54 |                 4.83 |
+| llama3.1-8b          | kb-llama3.1-8b                     |         10.24 |                 0.54 |                 5.14 |
+
+## Overview
+
+![overview](results/charts/overview.png)
+
+Headline metric per track: grammar exact match (zero-shot prompt), Belebele accuracy, agent task success. ✱ = reasoning group, scored on a fixed subset.
+
+| model                  |   grammar en |   grammar ka |   belebele en |   belebele ka |   agent en |   agent ka |   avg ka |   avg en |   gap |
+|:-----------------------|-------------:|-------------:|--------------:|--------------:|-----------:|-----------:|---------:|---------:|------:|
+| qwen3.6-27b            |         0.95 |         0.69 |          0.97 |          0.86 |       1.00 |       1.00 |     0.85 |     0.97 |  0.12 |
+| qwen3.8-27b            |         0.95 |         0.58 |          0.97 |          0.89 |       1.00 |       0.93 |     0.80 |     0.97 |  0.17 |
+| gemma4-26b-qat         |         0.95 |         0.64 |          0.99 |          0.83 |       0.93 |       0.87 |     0.78 |     0.96 |  0.18 |
+| gemma4-12b-qat         |         0.97 |         0.63 |          0.96 |          0.78 |       0.93 |       0.93 |     0.78 |     0.96 |  0.18 |
+| gemma4-e4b             |         0.95 |         0.66 |          0.83 |          0.63 |       0.87 |       0.73 |     0.67 |     0.88 |  0.21 |
+| qwen3-8b-think ✱       |         0.90 |         0.30 |          0.97 |          0.80 |       0.87 |       0.80 |     0.63 |     0.91 |  0.28 |
+| glm4.7-flash           |         0.90 |         0.63 |          0.86 |          0.60 |       0.93 |       0.67 |     0.63 |     0.90 |  0.27 |
+| gpt-oss-20b            |         0.97 |         0.31 |          0.99 |          0.77 |       0.87 |       0.80 |     0.63 |     0.94 |  0.32 |
+| qwen3-8b               |         0.85 |         0.51 |          0.90 |          0.57 |       0.80 |       0.73 |     0.60 |     0.85 |  0.25 |
+| qwen3-8b-q8            |         0.88 |         0.49 |          0.89 |          0.61 |       0.87 |       0.67 |     0.59 |     0.88 |  0.29 |
+| devstral-small-2-24b   |         0.88 |         0.36 |          0.94 |          0.71 |       0.87 |       0.67 |     0.58 |     0.89 |  0.32 |
+| ministral3-3b          |         0.53 |         0.14 |          0.80 |          0.57 |       0.87 |       0.67 |     0.46 |     0.73 |  0.27 |
+| llama3.1-8b            |         0.78 |         0.49 |          0.88 |          0.41 |       0.47 |       0.40 |     0.43 |     0.71 |  0.27 |
+| bonsai-27b-2bit        |         0.97 |         0.17 |          0.98 |          0.48 |       0.80 |       0.64 |     0.43 |     0.92 |  0.49 |
+| llama3.1-8b-q8         |         0.78 |         0.44 |          0.90 |          0.47 |       0.53 |       0.27 |     0.39 |     0.74 |  0.34 |
+| aya-expanse-8b         |         0.78 |         0.22 |          0.91 |          0.44 |       0.47 |       0.47 |     0.38 |     0.72 |  0.34 |
+| aya-expanse-8b-q8      |         0.75 |         0.14 |          0.92 |          0.39 |       0.53 |       0.47 |     0.33 |     0.73 |  0.40 |
+| nemotron3-nano-4b      |         0.75 |         0.03 |          0.90 |          0.40 |       0.73 |       0.43 |     0.29 |     0.79 |  0.51 |
+| deepseek-r1-qwen3-8b ✱ |         0.73 |         0.04 |          0.80 |          0.30 |       0.87 |       0.33 |     0.22 |     0.80 |  0.58 |
+| granite3.2-8b          |         0.72 |         0.00 |          0.86 |          0.29 |       0.60 |       0.27 |     0.19 |     0.73 |  0.54 |
+| lfm2-24b-a2b           |         0.82 |         0.00 |          0.86 |          0.16 |       0.93 |       0.13 |     0.10 |     0.87 |  0.78 |
+
+## How big a difference is real?
+
+Every score comes with a 95% Wilson interval in the tables below. With 15 agent scenarios one scenario is ~7 points, and a 60% score has an interval of roughly 36–80%; with 100 Belebele questions it narrows to about ±10 points. Treat gaps inside the intervals as ties.
+
+
+## Grammar correction
+
+![grammar](results/charts/grammar.png)
+
+`over_correction` = share of already-correct sentences the model changed; `missed` = share of wrong sentences returned unchanged; `gain` = edit-distance progress towards the gold sentence.
+
+| model                | variant                   | lang   |   n |   errors |   exact_match | 95% CI   |   char_similarity |   gain |   over_correction |   missed |   format_ok |   prompt_tokens |   completion_tokens |   latency_s |
+|:---------------------|:--------------------------|:-------|----:|---------:|--------------:|:---------|------------------:|-------:|------------------:|---------:|------------:|----------------:|--------------------:|------------:|
+| aya-expanse-8b       | few_shot                  | en     |  40 |        0 |          0.82 | 68%–91%  |              0.96 |   0.61 |              0.14 |     0.06 |        1.00 |          252.85 |                8.95 |        0.32 |
+| aya-expanse-8b       | few_shot                  | ka     |  51 |        0 |          0.25 | 16%–39%  |              0.81 |  -1.53 |              0.72 |     0.21 |        0.02 |         1425.88 |              197.94 |        6.41 |
+| aya-expanse-8b       | zero_shot                 | en     |  40 |        0 |          0.78 | 62%–88%  |              0.95 |   0.52 |              0.29 |     0.03 |        1.00 |          143.85 |                9.03 |        0.31 |
+| aya-expanse-8b       | zero_shot                 | ka     |  59 |        0 |          0.22 | 13%–34%  |              0.79 |  -1.14 |              0.65 |     0.28 |        0.37 |          448.58 |              122.34 |        3.70 |
+| aya-expanse-8b       | zero_shot_en_instructions | ka     |  59 |        0 |          0.37 | 26%–50%  |              0.91 |   0.03 |              0.20 |     0.59 |        1.00 |          176.58 |               32.41 |        1.08 |
+| aya-expanse-8b-q8    | few_shot                  | en     |  40 |        0 |          0.80 | 65%–90%  |              0.96 |   0.53 |              0.14 |     0.06 |        1.00 |          252.85 |                8.97 |        0.40 |
+| aya-expanse-8b-q8    | few_shot                  | ka     |  51 |        0 |          0.27 | 17%–41%  |              0.80 |  -2.06 |              0.72 |     0.18 |        0.02 |         1425.88 |              236.67 |        9.84 |
+| aya-expanse-8b-q8    | zero_shot                 | en     |  40 |        0 |          0.75 | 60%–86%  |              0.95 |   0.41 |              0.43 |     0.03 |        1.00 |          143.85 |                8.97 |        0.38 |
+| aya-expanse-8b-q8    | zero_shot                 | ka     |  59 |        0 |          0.14 | 7%–25%   |              0.71 |  -3.50 |              0.85 |     0.15 |        0.41 |          448.58 |              125.49 |        5.27 |
+| aya-expanse-8b-q8    | zero_shot_en_instructions | ka     |  59 |        0 |          0.42 | 31%–55%  |              0.91 |  -0.00 |              0.15 |     0.46 |        1.00 |          176.58 |               32.56 |        1.36 |
+| bonsai-27b-2bit      | few_shot                  | en     |  40 |        0 |          0.93 | 80%–97%  |              0.99 |   0.84 |              0.00 |     0.00 |        1.00 |          194.90 |                9.00 |        2.66 |
+| bonsai-27b-2bit      | few_shot                  | ka     |  51 |        0 |          0.27 | 17%–41%  |              0.89 |  -0.56 |              0.72 |     0.24 |        1.00 |          807.31 |               18.24 |        1.80 |
+| bonsai-27b-2bit      | zero_shot                 | en     |  40 |        0 |          0.97 | 87%–100% |              0.99 |   0.86 |              0.00 |     0.00 |        1.00 |           91.90 |                9.03 |        1.48 |
+| bonsai-27b-2bit      | zero_shot                 | ka     |  59 |        0 |          0.17 | 9%–28%   |              0.80 |  -1.37 |              0.70 |     0.41 |        1.00 |          222.15 |               18.24 |        3.32 |
+| bonsai-27b-2bit      | zero_shot_en_instructions | ka     |  59 |        0 |          0.17 | 9%–28%   |              0.80 |  -9.72 |              0.75 |     0.26 |        0.98 |          110.15 |               35.42 |        3.10 |
+| deepseek-r1-qwen3-8b | zero_shot                 | en     |  30 |        0 |          0.73 | 56%–86%  |              0.95 |   0.69 |              0.00 |     0.12 |        0.97 |           78.97 |              279.10 |        6.02 |
+| deepseek-r1-qwen3-8b | zero_shot                 | ka     |  27 |        0 |          0.04 | 1%–18%   |              0.35 | -11.75 |              0.89 |     0.17 |        0.37 |          348.89 |             1880.93 |       42.89 |
+| devstral-small-2-24b | few_shot                  | en     |  40 |        0 |          0.88 | 74%–95%  |              0.99 |   0.71 |              0.29 |     0.00 |        1.00 |          678.95 |                9.05 |        0.77 |
+| devstral-small-2-24b | few_shot                  | ka     |  51 |        0 |          0.39 | 27%–53%  |              0.91 |  -0.19 |              0.83 |     0.06 |        1.00 |         1183.67 |               15.90 |        1.28 |
+| devstral-small-2-24b | zero_shot                 | en     |  40 |        0 |          0.88 | 74%–95%  |              0.98 |   0.80 |              0.14 |     0.00 |        1.00 |          585.92 |                9.00 |        0.72 |
+| devstral-small-2-24b | zero_shot                 | ka     |  59 |        0 |          0.36 | 25%–48%  |              0.89 |  -0.21 |              0.90 |     0.08 |        1.00 |          684.44 |               15.51 |        1.17 |
+| devstral-small-2-24b | zero_shot_en_instructions | ka     |  59 |        0 |          0.39 | 28%–52%  |              0.92 |  -0.02 |              0.85 |     0.15 |        1.00 |          602.44 |               15.46 |        1.15 |
+| gemma4-12b-qat       | few_shot                  | en     |  40 |        0 |          0.97 | 87%–100% |              0.99 |   0.90 |              0.00 |     0.00 |        1.00 |          197.88 |                9.00 |        1.27 |
+| gemma4-12b-qat       | few_shot                  | ka     |  51 |        0 |          0.69 | 55%–80%  |              0.93 |   0.19 |              0.39 |     0.06 |        1.00 |          688.18 |               14.55 |        3.63 |
+| gemma4-12b-qat       | zero_shot                 | en     |  40 |        0 |          0.97 | 87%–100% |              0.99 |   0.90 |              0.00 |     0.00 |        1.00 |           92.88 |                9.00 |        0.82 |
+| gemma4-12b-qat       | zero_shot                 | ka     |  59 |        0 |          0.63 | 50%–74%  |              0.94 |  -0.02 |              0.20 |     0.21 |        1.00 |          176.08 |               14.39 |        1.42 |
+| gemma4-12b-qat       | zero_shot_en_instructions | ka     |  59 |        0 |          0.63 | 50%–74%  |              0.91 |  -0.09 |              0.40 |     0.10 |        1.00 |          107.08 |               14.51 |        1.14 |
+| gemma4-26b-qat       | few_shot                  | en     |  40 |        0 |          0.95 | 83%–99%  |              0.99 |   0.85 |              0.00 |     0.00 |        1.00 |          197.88 |                9.03 |        0.22 |
+| gemma4-26b-qat       | few_shot                  | ka     |  51 |        0 |          0.63 | 49%–75%  |              0.94 |   0.35 |              0.56 |     0.06 |        1.00 |          688.18 |               14.45 |        0.34 |
+| gemma4-26b-qat       | zero_shot                 | en     |  40 |        0 |          0.95 | 83%–99%  |              0.98 |   0.89 |              0.00 |     0.00 |        1.00 |           92.88 |                9.12 |        0.21 |
+| gemma4-26b-qat       | zero_shot                 | ka     |  59 |        0 |          0.64 | 52%–75%  |              0.95 |   0.35 |              0.25 |     0.15 |        1.00 |          176.08 |               14.42 |        0.35 |
+| gemma4-26b-qat       | zero_shot_en_instructions | ka     |  59 |        0 |          0.66 | 53%–77%  |              0.96 |   0.33 |              0.35 |     0.05 |        1.00 |          107.08 |               14.37 |        0.29 |
+| gemma4-e4b           | few_shot                  | en     |  40 |        0 |          0.93 | 80%–97%  |              0.98 |   0.71 |              0.00 |     0.00 |        1.00 |          193.88 |                9.00 |        0.24 |
+| gemma4-e4b           | few_shot                  | ka     |  51 |        0 |          0.59 | 45%–71%  |              0.90 |  -0.00 |              0.56 |     0.09 |        1.00 |          684.18 |               14.41 |        0.50 |
+| gemma4-e4b           | zero_shot                 | en     |  40 |        0 |          0.95 | 83%–99%  |              0.99 |   0.84 |              0.00 |     0.00 |        1.00 |           88.88 |                9.03 |        0.24 |
+| gemma4-e4b           | zero_shot                 | ka     |  59 |        0 |          0.66 | 53%–77%  |              0.94 |   0.35 |              0.35 |     0.13 |        1.00 |          172.08 |               14.44 |        0.36 |
+| gemma4-e4b           | zero_shot_en_instructions | ka     |  59 |        0 |          0.58 | 45%–69%  |              0.92 |   0.17 |              0.45 |     0.23 |        1.00 |          103.08 |               14.39 |        0.35 |
+| glm4.7-flash         | few_shot                  | en     |  40 |        0 |          0.95 | 83%–99%  |              0.99 |   0.96 |              0.00 |     0.03 |        1.00 |          172.93 |                9.15 |        0.24 |
+| glm4.7-flash         | few_shot                  | ka     |  51 |        0 |          0.53 | 40%–66%  |              0.94 |   0.36 |              0.56 |     0.21 |        1.00 |         1231.90 |               29.53 |        0.80 |
+| glm4.7-flash         | zero_shot                 | en     |  40 |        0 |          0.90 | 77%–96%  |              0.98 |   0.71 |              0.00 |     0.03 |        1.00 |           80.90 |                9.07 |        0.23 |
+| glm4.7-flash         | zero_shot                 | ka     |  59 |        0 |          0.63 | 50%–74%  |              0.94 |   0.23 |              0.30 |     0.15 |        1.00 |          350.66 |               29.27 |        0.69 |
+| glm4.7-flash         | zero_shot_en_instructions | ka     |  59 |        0 |          0.64 | 52%–75%  |              0.94 |   0.47 |              0.20 |     0.21 |        1.00 |          111.66 |               29.31 |        0.68 |
+| gpt-oss-20b          | few_shot                  | en     |  40 |        0 |          0.90 | 77%–96%  |              0.98 |   0.70 |              0.00 |     0.03 |        1.00 |          232.80 |               58.30 |        1.38 |
+| gpt-oss-20b          | few_shot                  | ka     |  51 |        0 |          0.31 | 20%–45%  |              0.90 |  -0.27 |              0.78 |     0.15 |        1.00 |          584.18 |              167.57 |        3.98 |
+| gpt-oss-20b          | zero_shot                 | en     |  40 |        0 |          0.97 | 87%–100% |              0.99 |   0.97 |              0.00 |     0.00 |        1.00 |          142.78 |               40.58 |        1.00 |
+| gpt-oss-20b          | zero_shot                 | ka     |  59 |        0 |          0.31 | 20%–43%  |              0.88 |  -0.12 |              0.70 |     0.26 |        1.00 |          193.05 |              139.56 |        3.32 |
+| gpt-oss-20b          | zero_shot_en_instructions | ka     |  59 |        1 |          0.36 | 25%–49%  |              0.90 |   0.00 |              0.55 |     0.37 |        1.00 |          151.44 |              122.93 |        2.93 |
+| granite3.2-8b        | few_shot                  | en     |  40 |        0 |          0.88 | 74%–95%  |              0.97 |   0.74 |              0.00 |     0.00 |        1.00 |          251.53 |                9.57 |        0.39 |
+| granite3.2-8b        | few_shot                  | ka     |  51 |        0 |          0.16 | 8%–28%   |              0.79 |  -3.15 |              0.61 |     0.42 |        0.90 |         1569.84 |               54.37 |        2.01 |
+| granite3.2-8b        | zero_shot                 | en     |  40 |        0 |          0.72 | 57%–84%  |              0.95 |   0.27 |              0.14 |     0.00 |        1.00 |          126.53 |                9.68 |        0.38 |
+| granite3.2-8b        | zero_shot                 | ka     |  59 |        0 |          0.00 | 0%–6%    |              0.34 | -27.87 |              1.00 |     0.03 |        0.00 |          500.51 |              776.41 |       25.40 |
+| granite3.2-8b        | zero_shot_en_instructions | ka     |  59 |        0 |          0.20 | 12%–32%  |              0.89 |  -0.24 |              0.50 |     0.49 |        0.98 |          168.51 |               37.37 |        1.28 |
+| lfm2-24b-a2b         | few_shot                  | en     |  40 |        0 |          0.93 | 80%–97%  |              0.97 |   0.84 |              0.00 |     0.00 |        1.00 |          187.00 |                9.07 |        0.58 |
+| lfm2-24b-a2b         | few_shot                  | ka     |  51 |        0 |          0.12 | 6%–23%   |              0.54 | -10.24 |              0.83 |     0.24 |        0.63 |         2172.57 |              218.59 |        7.41 |
+| lfm2-24b-a2b         | zero_shot                 | en     |  40 |        0 |          0.82 | 68%–91%  |              0.97 |   0.82 |              0.00 |     0.18 |        1.00 |           87.97 |                9.22 |        0.31 |
+| lfm2-24b-a2b         | zero_shot                 | ka     |  59 |        0 |          0.00 | 0%–6%    |              0.16 | -57.19 |              1.00 |     0.00 |        0.00 |          644.17 |             1009.59 |       12.35 |
+| lfm2-24b-a2b         | zero_shot_en_instructions | ka     |  59 |        0 |          0.27 | 17%–40%  |              0.92 |  -0.05 |              0.25 |     0.62 |        1.00 |          144.17 |               53.93 |        1.36 |
+| llama3.1-8b          | few_shot                  | en     |  40 |        0 |          0.82 | 68%–91%  |              0.97 |   0.66 |              0.29 |     0.00 |        1.00 |          177.93 |                8.97 |        0.30 |
+| llama3.1-8b          | few_shot                  | ka     |  51 |        0 |          0.49 | 36%–62%  |              0.92 |  -2.31 |              0.28 |     0.45 |        0.98 |         2157.53 |               73.33 |        2.37 |
+| llama3.1-8b          | zero_shot                 | en     |  40 |        0 |          0.78 | 62%–88%  |              0.95 |   0.40 |              0.14 |     0.03 |        1.00 |           85.90 |                9.30 |        0.31 |
+| llama3.1-8b          | zero_shot                 | ka     |  59 |        0 |          0.49 | 37%–62%  |              0.89 |  -0.59 |              0.35 |     0.28 |        1.00 |          642.14 |               50.31 |        1.46 |
+| llama3.1-8b          | zero_shot_en_instructions | ka     |  59 |        0 |          0.34 | 23%–47%  |              0.91 |  -0.14 |              0.80 |     0.21 |        1.00 |          141.14 |               54.59 |        1.69 |
+| llama3.1-8b-q8       | few_shot                  | en     |  40 |        0 |          0.85 | 71%–93%  |              0.97 |   0.71 |              0.29 |     0.00 |        1.00 |          177.93 |                9.00 |        0.37 |
+| llama3.1-8b-q8       | few_shot                  | ka     |  51 |        0 |          0.51 | 38%–64%  |              0.92 |   0.08 |              0.44 |     0.33 |        0.98 |         2157.53 |               64.22 |        2.78 |
+| llama3.1-8b-q8       | zero_shot                 | en     |  40 |        0 |          0.78 | 62%–88%  |              0.96 |   0.58 |              0.14 |     0.03 |        1.00 |           85.90 |                9.07 |        0.37 |
+| llama3.1-8b-q8       | zero_shot                 | ka     |  59 |        0 |          0.44 | 32%–57%  |              0.91 |   0.00 |              0.55 |     0.18 |        1.00 |          642.14 |               53.47 |        2.30 |
+| llama3.1-8b-q8       | zero_shot_en_instructions | ka     |  59 |        0 |          0.37 | 26%–50%  |              0.91 |  -0.26 |              0.65 |     0.13 |        1.00 |          141.14 |               53.97 |        2.13 |
+| ministral3-3b        | few_shot                  | en     |  40 |        0 |          0.60 | 45%–74%  |              0.94 |   0.24 |              0.71 |     0.00 |        0.80 |          704.95 |                9.47 |        0.20 |
+| ministral3-3b        | few_shot                  | ka     |  51 |        0 |          0.24 | 14%–37%  |              0.84 |  -1.59 |              0.89 |     0.06 |        0.98 |         1209.67 |               15.24 |        0.33 |
+| ministral3-3b        | zero_shot                 | en     |  40 |        0 |          0.53 | 37%–67%  |              0.92 |  -0.09 |              0.86 |     0.00 |        0.72 |          611.92 |                9.47 |        0.19 |
+| ministral3-3b        | zero_shot                 | ka     |  59 |        0 |          0.14 | 7%–25%   |              0.82 |  -2.37 |              0.95 |     0.05 |        0.83 |          710.44 |               15.90 |        0.32 |
+| ministral3-3b        | zero_shot_en_instructions | ka     |  59 |        0 |          0.05 | 2%–14%   |              0.79 |  -1.85 |              0.95 |     0.03 |        0.97 |          628.44 |               15.19 |        0.30 |
+| nemotron3-nano-4b    | few_shot                  | en     |  40 |        0 |          0.82 | 68%–91%  |              0.97 |   0.55 |              0.29 |     0.06 |        1.00 |          186.95 |                9.00 |        0.48 |
+| nemotron3-nano-4b    | few_shot                  | ka     |  51 |        0 |          0.00 | 0%–7%    |              0.65 | -10.81 |              1.00 |     0.00 |        0.98 |          691.67 |               35.63 |        1.47 |
+| nemotron3-nano-4b    | zero_shot                 | en     |  40 |        0 |          0.75 | 60%–86%  |              0.96 |   0.66 |              0.00 |     0.21 |        1.00 |           93.92 |                8.95 |        0.34 |
+| nemotron3-nano-4b    | zero_shot                 | ka     |  59 |        0 |          0.03 | 1%–12%   |              0.61 |  -4.55 |              0.90 |     0.08 |        0.97 |          192.44 |               15.36 |        0.66 |
+| nemotron3-nano-4b    | zero_shot_en_instructions | ka     |  59 |        0 |          0.05 | 2%–14%   |              0.69 |  -3.44 |              0.90 |     0.05 |        0.98 |          110.44 |               32.63 |        0.84 |
+| qwen3-8b             | few_shot                  | en     |  40 |        0 |          0.90 | 77%–96%  |              0.98 |   0.79 |              0.00 |     0.06 |        1.00 |          183.93 |                8.95 |        0.35 |
+| qwen3-8b             | few_shot                  | ka     |  51 |        0 |          0.55 | 41%–68%  |              0.93 |   0.42 |              0.22 |     0.45 |        1.00 |         1240.94 |               29.39 |        0.87 |
+| qwen3-8b             | zero_shot                 | en     |  40 |        0 |          0.85 | 71%–93%  |              0.97 |   0.84 |              0.00 |     0.15 |        1.00 |           91.90 |                9.07 |        0.31 |
+| qwen3-8b             | zero_shot                 | ka     |  59 |        0 |          0.51 | 38%–63%  |              0.93 |   0.39 |              0.00 |     0.64 |        1.00 |          361.69 |               29.66 |        0.81 |
+| qwen3-8b             | zero_shot_en_instructions | ka     |  59 |        0 |          0.46 | 34%–58%  |              0.93 |   0.34 |              0.10 |     0.62 |        1.00 |          122.69 |               29.71 |        0.84 |
+| qwen3-8b-q8          | few_shot                  | en     |  40 |        0 |          0.90 | 77%–96%  |              0.98 |   0.79 |              0.00 |     0.06 |        1.00 |          183.93 |                8.95 |        0.41 |
+| qwen3-8b-q8          | few_shot                  | ka     |  51 |        0 |          0.57 | 43%–69%  |              0.93 |   0.44 |              0.22 |     0.45 |        1.00 |         1240.94 |               29.41 |        1.33 |
+| qwen3-8b-q8          | zero_shot                 | en     |  40 |        0 |          0.88 | 74%–95%  |              0.98 |   0.87 |              0.00 |     0.12 |        1.00 |           91.90 |                9.10 |        0.42 |
+| qwen3-8b-q8          | zero_shot                 | ka     |  59 |        0 |          0.49 | 37%–62%  |              0.94 |   0.49 |              0.05 |     0.67 |        1.00 |          361.69 |               29.53 |        1.27 |
+| qwen3-8b-q8          | zero_shot_en_instructions | ka     |  59 |        0 |          0.53 | 40%–65%  |              0.94 |   0.49 |              0.10 |     0.59 |        1.00 |          122.69 |               29.63 |        1.24 |
+| qwen3-8b-think       | zero_shot                 | en     |  30 |        0 |          0.90 | 74%–97%  |              0.98 |   0.79 |              0.00 |     0.04 |        1.00 |           85.97 |              289.60 |        9.00 |
+| qwen3-8b-think       | zero_shot                 | ka     |  27 |        0 |          0.30 | 16%–48%  |              0.87 |  -0.37 |              0.44 |     0.39 |        0.96 |          355.89 |              965.48 |       29.92 |
+| qwen3.6-27b          | few_shot                  | en     |  40 |        0 |          0.93 | 80%–97%  |              0.98 |   0.68 |              0.00 |     0.00 |        1.00 |          194.90 |                9.03 |        2.36 |
+| qwen3.6-27b          | few_shot                  | ka     |  51 |        0 |          0.76 | 63%–86%  |              0.95 |   0.62 |              0.22 |     0.03 |        1.00 |          807.31 |               18.02 |        1.82 |
+| qwen3.6-27b          | zero_shot                 | en     |  40 |        0 |          0.95 | 83%–99%  |              0.98 |   0.74 |              0.00 |     0.00 |        1.00 |           91.90 |                9.00 |        1.38 |
+| qwen3.6-27b          | zero_shot                 | ka     |  59 |        0 |          0.69 | 57%–80%  |              0.93 |   0.23 |              0.20 |     0.08 |        1.00 |          222.15 |               17.88 |        3.21 |
+| qwen3.6-27b          | zero_shot_en_instructions | ka     |  59 |        0 |          0.64 | 52%–75%  |              0.92 |   0.11 |              0.35 |     0.08 |        1.00 |          110.15 |               17.93 |        2.18 |
+| qwen3.8-27b          | few_shot                  | en     |  40 |        0 |          0.95 | 83%–99%  |              0.99 |   0.87 |              0.00 |     0.00 |        1.00 |          194.90 |                9.03 |        2.36 |
+| qwen3.8-27b          | few_shot                  | ka     |  51 |        0 |          0.75 | 61%–84%  |              0.96 |   0.60 |              0.22 |     0.09 |        1.00 |          807.31 |               18.18 |        1.83 |
+| qwen3.8-27b          | zero_shot                 | en     |  40 |        0 |          0.95 | 83%–99%  |              0.99 |   0.87 |              0.00 |     0.00 |        1.00 |           91.90 |                9.03 |        1.38 |
+| qwen3.8-27b          | zero_shot                 | ka     |  59 |        0 |          0.58 | 45%–69%  |              0.86 |  -0.20 |              0.50 |     0.10 |        0.90 |          222.15 |               19.34 |        3.11 |
+| qwen3.8-27b          | zero_shot_en_instructions | ka     |  59 |        0 |          0.64 | 52%–75%  |              0.94 |   0.28 |              0.35 |     0.08 |        1.00 |          110.15 |               18.08 |        2.19 |
+
+## Reading comprehension (Belebele)
+
+![comprehension](results/charts/comprehension.png)
+
+| model                | variant   | lang   |   n |   errors |   accuracy | 95% CI   |   parsed |   prompt_tokens |   completion_tokens |   latency_s |
+|:---------------------|:----------|:-------|----:|---------:|-----------:|:---------|---------:|----------------:|--------------------:|------------:|
+| aya-expanse-8b       | belebele  | en     | 100 |        0 |       0.91 | 84%–95%  |     1.00 |          246.83 |               14.44 |        0.89 |
+| aya-expanse-8b       | belebele  | ka     | 100 |        0 |       0.44 | 35%–54%  |     1.00 |          921.77 |              288.82 |       11.05 |
+| aya-expanse-8b-q8    | belebele  | en     | 100 |        0 |       0.92 | 85%–96%  |     1.00 |          246.83 |               12.95 |        1.00 |
+| aya-expanse-8b-q8    | belebele  | ka     | 100 |        0 |       0.39 | 30%–49%  |     1.00 |          921.77 |              299.55 |       14.80 |
+| bonsai-27b-2bit      | belebele  | en     | 100 |        0 |       0.98 | 93%–99%  |     1.00 |          196.92 |                7.07 |        2.47 |
+| bonsai-27b-2bit      | belebele  | ka     | 100 |        0 |       0.48 | 38%–58%  |     1.00 |          493.66 |               98.66 |        9.81 |
+| deepseek-r1-qwen3-8b | belebele  | en     |  30 |        0 |       0.80 | 63%–90%  |     0.90 |          186.57 |             1670.27 |       36.83 |
+| deepseek-r1-qwen3-8b | belebele  | ka     |  30 |        0 |       0.30 | 17%–48%  |     0.70 |          823.63 |             1987.83 |       47.32 |
+| devstral-small-2-24b | belebele  | en     | 100 |        0 |       0.94 | 88%–97%  |     1.00 |          692.21 |                2.00 |        1.31 |
+| devstral-small-2-24b | belebele  | ka     | 100 |        0 |       0.71 | 61%–79%  |     1.00 |          910.42 |                2.00 |        2.57 |
+| gemma4-12b-qat       | belebele  | en     | 100 |        0 |       0.96 | 90%–98%  |     1.00 |          195.67 |                2.00 |        1.28 |
+| gemma4-12b-qat       | belebele  | ka     | 100 |        0 |       0.78 | 69%–85%  |     0.97 |          385.68 |                5.81 |        2.38 |
+| gemma4-26b-qat       | belebele  | en     | 100 |        0 |       0.99 | 95%–100% |     1.00 |          195.67 |                2.00 |        0.29 |
+| gemma4-26b-qat       | belebele  | ka     | 100 |        0 |       0.83 | 74%–89%  |     1.00 |          385.68 |                2.00 |        0.47 |
+| gemma4-e4b           | belebele  | en     | 100 |        0 |       0.83 | 74%–89%  |     1.00 |          191.67 |                2.00 |        0.20 |
+| gemma4-e4b           | belebele  | ka     | 100 |        0 |       0.63 | 53%–72%  |     1.00 |          381.68 |                2.00 |        0.32 |
+| glm4.7-flash         | belebele  | en     | 100 |        0 |       0.86 | 78%–91%  |     1.00 |          184.93 |                2.06 |        0.33 |
+| glm4.7-flash         | belebele  | ka     | 100 |        0 |       0.60 | 50%–69%  |     1.00 |          809.46 |                8.10 |        1.30 |
+| gpt-oss-20b          | belebele  | en     | 100 |        0 |       0.99 | 95%–100% |     1.00 |          245.26 |               48.06 |        1.47 |
+| gpt-oss-20b          | belebele  | ka     | 100 |        0 |       0.77 | 68%–84%  |     1.00 |          355.41 |               92.25 |        2.56 |
+| granite3.2-8b        | belebele  | en     | 100 |        0 |       0.86 | 78%–91%  |     1.00 |          258.90 |                3.81 |        0.78 |
+| granite3.2-8b        | belebele  | ka     | 100 |        0 |       0.29 | 21%–39%  |     1.00 |         1050.96 |              232.41 |       10.95 |
+| lfm2-24b-a2b         | belebele  | en     | 100 |        0 |       0.86 | 78%–91%  |     1.00 |          195.24 |                2.00 |        0.78 |
+| lfm2-24b-a2b         | belebele  | ka     | 100 |        0 |       0.16 | 10%–24%  |     0.98 |         1484.32 |               69.40 |        3.29 |
+| llama3.1-8b          | belebele  | en     | 100 |        0 |       0.88 | 80%–93%  |     1.00 |          189.82 |                3.04 |        0.60 |
+| llama3.1-8b          | belebele  | ka     | 100 |        0 |       0.41 | 32%–51%  |     1.00 |         1481.06 |               48.12 |        5.48 |
+| llama3.1-8b-q8       | belebele  | en     | 100 |        0 |       0.90 | 83%–94%  |     1.00 |          189.82 |                3.17 |        0.57 |
+| llama3.1-8b-q8       | belebele  | ka     | 100 |        0 |       0.47 | 38%–57%  |     1.00 |         1481.06 |               45.56 |        5.63 |
+| ministral3-3b        | belebele  | en     | 100 |        0 |       0.80 | 71%–87%  |     1.00 |          718.21 |                2.00 |        0.20 |
+| ministral3-3b        | belebele  | ka     | 100 |        0 |       0.57 | 47%–66%  |     1.00 |          936.42 |                6.83 |        0.47 |
+| nemotron3-nano-4b    | belebele  | en     | 100 |        0 |       0.90 | 83%–94%  |     1.00 |          200.21 |                2.00 |        0.42 |
+| nemotron3-nano-4b    | belebele  | ka     | 100 |        0 |       0.40 | 31%–50%  |     1.00 |          418.42 |                2.00 |        0.68 |
+| qwen3-8b             | belebele  | en     | 100 |        0 |       0.90 | 83%–94%  |     1.00 |          198.54 |                2.28 |        0.52 |
+| qwen3-8b             | belebele  | ka     | 100 |        0 |       0.57 | 47%–66%  |     1.00 |          823.92 |               42.88 |        3.11 |
+| qwen3-8b-q8          | belebele  | en     | 100 |        0 |       0.89 | 81%–94%  |     1.00 |          198.54 |                2.28 |        0.57 |
+| qwen3-8b-q8          | belebele  | ka     | 100 |        0 |       0.61 | 51%–70%  |     1.00 |          823.92 |               42.02 |        3.70 |
+| qwen3-8b-think       | belebele  | en     |  30 |        0 |       0.97 | 83%–99%  |     0.97 |          193.57 |              398.10 |       13.21 |
+| qwen3-8b-think       | belebele  | ka     |  30 |        0 |       0.80 | 63%–90%  |     0.97 |          830.63 |             1309.77 |       44.39 |
+| qwen3.6-27b          | belebele  | en     | 100 |        0 |       0.97 | 92%–99%  |     1.00 |          196.92 |                2.00 |        1.83 |
+| qwen3.6-27b          | belebele  | ka     | 100 |        0 |       0.86 | 78%–91%  |     1.00 |          493.66 |                2.00 |        4.00 |
+| qwen3.6-27b-think    | belebele  | en     |  30 |        0 |       1.00 | 89%–100% |     1.00 |          196.00 |              760.20 |       51.24 |
+| qwen3.6-27b-think    | belebele  | ka     |  30 |        0 |       0.93 | 79%–98%  |     0.93 |          497.40 |             1246.70 |       85.72 |
+| qwen3.8-27b          | belebele  | en     | 100 |        0 |       0.97 | 92%–99%  |     1.00 |          196.92 |                2.00 |        1.83 |
+| qwen3.8-27b          | belebele  | ka     | 100 |        0 |       0.89 | 81%–94%  |     1.00 |          493.66 |                2.00 |        3.98 |
+
+## Agent behaviour
+
+![agent](results/charts/agent.png)
+
+| model                | variant   | lang   |   n |   errors |   success | 95% CI   |   language_match |   steps |   invalid_calls |   total_tokens |   prompt_tokens |   completion_tokens |   latency_s |
+|:---------------------|:----------|:-------|----:|---------:|----------:|:---------|-----------------:|--------:|----------------:|---------------:|----------------:|--------------------:|------------:|
+| aya-expanse-8b       | tools-v1  | en     |  15 |        0 |      0.47 | 25%–70%  |             1.00 |    2.27 |            0.00 |        2248.00 |         2098.00 |              150.00 |        5.01 |
+| aya-expanse-8b       | tools-v1  | ka     |  15 |        0 |      0.47 | 25%–70%  |             0.87 |    2.00 |            0.00 |        2194.80 |         1913.60 |              281.20 |        8.72 |
+| aya-expanse-8b-q8    | tools-v1  | en     |  15 |        0 |      0.53 | 30%–75%  |             1.00 |    2.00 |            0.00 |        1949.80 |         1826.13 |              123.67 |        5.53 |
+| aya-expanse-8b-q8    | tools-v1  | ka     |  15 |        0 |      0.47 | 25%–70%  |             1.00 |    1.93 |            0.00 |        2172.53 |         1846.47 |              326.07 |       13.93 |
+| bonsai-27b-2bit      | tools-v1  | en     |  15 |        0 |      0.80 | 55%–93%  |             1.00 |    2.27 |            0.00 |        2221.40 |         2140.53 |               80.87 |        6.84 |
+| bonsai-27b-2bit      | tools-v1  | ka     |  15 |        1 |      0.64 | 39%–84%  |             0.21 |    1.93 |            0.00 |        1976.79 |         2397.00 |              121.13 |       10.21 |
+| deepseek-r1-qwen3-8b | tools-v1  | en     |  15 |        0 |      0.87 | 62%–96%  |             1.00 |    2.40 |            0.00 |        4791.27 |         2856.93 |             1934.33 |       44.59 |
+| deepseek-r1-qwen3-8b | tools-v1  | ka     |  15 |        0 |      0.33 | 15%–58%  |             0.69 |    1.47 |            0.00 |        2772.07 |         1748.13 |             1023.93 |       23.78 |
+| devstral-small-2-24b | tools-v1  | en     |  15 |        0 |      0.87 | 62%–96%  |             1.00 |    2.00 |            0.00 |        1462.40 |         1413.73 |               48.67 |        3.38 |
+| devstral-small-2-24b | tools-v1  | ka     |  15 |        0 |      0.67 | 42%–85%  |             0.87 |    1.67 |            0.00 |        1251.87 |         1190.67 |               61.20 |        4.41 |
+| gemma4-12b-qat       | tools-v1  | en     |  15 |        0 |      0.93 | 70%–99%  |             1.00 |    2.20 |            0.00 |        1533.53 |         1475.80 |               57.73 |        3.33 |
+| gemma4-12b-qat       | tools-v1  | ka     |  15 |        0 |      0.93 | 70%–99%  |             1.00 |    2.07 |            0.00 |        1538.93 |         1404.47 |              134.47 |        6.68 |
+| gemma4-26b-qat       | tools-v1  | en     |  15 |        0 |      0.93 | 70%–99%  |             1.00 |    2.07 |            0.00 |        1425.67 |         1369.27 |               56.40 |        1.21 |
+| gemma4-26b-qat       | tools-v1  | ka     |  15 |        0 |      0.87 | 62%–96%  |             1.00 |    2.00 |            0.00 |        1412.73 |         1345.27 |               67.47 |        1.52 |
+| gemma4-e4b           | tools-v1  | en     |  15 |        0 |      0.87 | 62%–96%  |             1.00 |    2.27 |            0.00 |        1562.27 |         1507.87 |               54.40 |        1.65 |
+| gemma4-e4b           | tools-v1  | ka     |  15 |        0 |      0.73 | 48%–89%  |             0.73 |    2.20 |            0.00 |        1547.80 |         1487.33 |               60.47 |        1.92 |
+| glm4.7-flash         | tools-v1  | en     |  15 |        0 |      0.93 | 70%–99%  |             1.00 |    2.07 |            0.00 |        1721.20 |         1650.00 |               71.20 |        1.64 |
+| glm4.7-flash         | tools-v1  | ka     |  15 |        0 |      0.67 | 42%–85%  |             1.00 |    1.73 |            0.00 |        1683.93 |         1485.53 |              198.40 |        4.32 |
+| gpt-oss-20b          | tools-v1  | en     |  15 |        0 |      0.87 | 62%–96%  |             1.00 |    2.13 |            0.00 |        1123.53 |         1044.73 |               78.80 |        2.14 |
+| gpt-oss-20b          | tools-v1  | ka     |  15 |        0 |      0.80 | 55%–93%  |             0.93 |    2.13 |            0.00 |        1156.13 |         1062.87 |               93.27 |        2.47 |
+| granite3.2-8b        | tools-v1  | en     |  15 |        0 |      0.60 | 36%–80%  |             1.00 |    1.87 |            0.00 |        1856.93 |         1796.47 |               60.47 |        1.89 |
+| granite3.2-8b        | tools-v1  | ka     |  15 |        0 |      0.27 | 11%–52%  |             0.80 |    1.47 |            0.00 |        1591.67 |         1463.73 |              127.93 |        3.97 |
+| lfm2-24b-a2b         | tools-v1  | en     |  15 |        0 |      0.93 | 70%–99%  |             1.00 |    2.27 |            0.00 |        1731.73 |         1674.33 |               57.40 |        1.55 |
+| lfm2-24b-a2b         | tools-v1  | ka     |  15 |        0 |      0.13 | 4%–38%   |             0.80 |    1.80 |            0.00 |        1900.87 |         1417.47 |              483.40 |        7.50 |
+| llama3.1-8b          | tools-v1  | en     |  15 |        0 |      0.47 | 25%–70%  |             1.00 |    2.00 |            0.00 |         952.47 |          891.87 |               60.60 |        2.73 |
+| llama3.1-8b          | tools-v1  | ka     |  15 |        0 |      0.40 | 20%–64%  |             0.80 |    1.80 |            0.00 |        1318.60 |          971.47 |              347.13 |        9.21 |
+| llama3.1-8b-q8       | tools-v1  | en     |  15 |        0 |      0.53 | 30%–75%  |             1.00 |    1.87 |            0.00 |         913.47 |          859.07 |               54.40 |        3.39 |
+| llama3.1-8b-q8       | tools-v1  | ka     |  15 |        0 |      0.27 | 11%–52%  |             0.73 |    1.73 |            0.00 |        1483.33 |          970.53 |              512.80 |       21.50 |
+| ministral3-3b        | tools-v1  | en     |  15 |        0 |      0.87 | 62%–96%  |             1.00 |    2.27 |            0.00 |        1685.47 |         1623.80 |               61.67 |        1.18 |
+| ministral3-3b        | tools-v1  | ka     |  15 |        0 |      0.67 | 42%–85%  |             1.00 |    2.07 |            0.00 |        1567.33 |         1486.93 |               80.40 |        1.56 |
+| nemotron3-nano-4b    | tools-v1  | en     |  15 |        0 |      0.73 | 48%–89%  |             1.00 |    2.20 |            0.00 |        2427.33 |         2324.80 |              102.53 |        2.19 |
+| nemotron3-nano-4b    | tools-v1  | ka     |  15 |        1 |      0.43 | 21%–67%  |             0.43 |    1.71 |            0.00 |        1867.93 |         2320.53 |               85.80 |        1.99 |
+| qwen3-8b             | tools-v1  | en     |  15 |        0 |      0.80 | 55%–93%  |             1.00 |    2.07 |            0.00 |        1397.33 |         1337.73 |               59.60 |        1.93 |
+| qwen3-8b             | tools-v1  | ka     |  15 |        0 |      0.73 | 48%–89%  |             1.00 |    2.07 |            0.00 |        1552.07 |         1415.93 |              136.13 |        4.25 |
+| qwen3-8b-q8          | tools-v1  | en     |  15 |        0 |      0.87 | 62%–96%  |             1.00 |    2.27 |            0.00 |        1541.67 |         1476.27 |               65.40 |        2.93 |
+| qwen3-8b-q8          | tools-v1  | ka     |  15 |        0 |      0.67 | 42%–85%  |             1.00 |    2.07 |            0.00 |        1617.13 |         1417.13 |              200.00 |        8.88 |
+| qwen3-8b-think       | tools-v1  | en     |  15 |        0 |      0.87 | 62%–96%  |             1.00 |    2.13 |            0.00 |        1846.33 |         1374.07 |              472.27 |       15.48 |
+| qwen3-8b-think       | tools-v1  | ka     |  15 |        0 |      0.80 | 55%–93%  |             0.93 |    2.20 |            0.00 |        2523.40 |         1502.73 |             1020.67 |       34.07 |
+| qwen3.6-27b          | tools-v1  | en     |  15 |        0 |      1.00 | 80%–100% |             1.00 |    2.20 |            0.00 |        2138.53 |         2067.20 |               71.33 |        6.47 |
+| qwen3.6-27b          | tools-v1  | ka     |  15 |        0 |      1.00 | 80%–100% |             1.00 |    2.00 |            0.00 |        2036.60 |         1926.47 |              110.13 |        9.52 |
+| qwen3.8-27b          | tools-v1  | en     |  15 |        0 |      1.00 | 80%–100% |             1.00 |    2.07 |            0.00 |        2038.67 |         1953.73 |               84.93 |        7.30 |
+| qwen3.8-27b          | tools-v1  | ka     |  15 |        0 |      0.93 | 70%–99%  |             1.00 |    2.00 |            0.00 |        2028.40 |         1915.47 |              112.93 |        9.73 |
+
+## Quantization: Q4 vs Q8
+
+Same model, 4-bit vs 8-bit weights. Δ = Q8 − Q4: does quantization hurt Georgian more than English?
+
+| model          | track    | lang   |   q4 |   q8 |   delta |
+|:---------------|:---------|:-------|-----:|-----:|--------:|
+| aya-expanse-8b | grammar  | en     | 0.78 | 0.75 |   -0.03 |
+| aya-expanse-8b | grammar  | ka     | 0.22 | 0.14 |   -0.08 |
+| llama3.1-8b    | grammar  | en     | 0.78 | 0.78 |    0.00 |
+| llama3.1-8b    | grammar  | ka     | 0.49 | 0.44 |   -0.05 |
+| qwen3-8b       | grammar  | en     | 0.85 | 0.88 |    0.03 |
+| qwen3-8b       | grammar  | ka     | 0.51 | 0.49 |   -0.02 |
+| aya-expanse-8b | belebele | en     | 0.91 | 0.92 |    0.01 |
+| aya-expanse-8b | belebele | ka     | 0.44 | 0.39 |   -0.05 |
+| llama3.1-8b    | belebele | en     | 0.88 | 0.90 |    0.02 |
+| llama3.1-8b    | belebele | ka     | 0.41 | 0.47 |    0.06 |
+| qwen3-8b       | belebele | en     | 0.90 | 0.89 |   -0.01 |
+| qwen3-8b       | belebele | ka     | 0.57 | 0.61 |    0.04 |
+| aya-expanse-8b | agent    | en     | 0.47 | 0.53 |    0.07 |
+| aya-expanse-8b | agent    | ka     | 0.47 | 0.47 |    0.00 |
+| llama3.1-8b    | agent    | en     | 0.47 | 0.53 |    0.07 |
+| llama3.1-8b    | agent    | ka     | 0.40 | 0.27 |   -0.13 |
+| qwen3-8b       | agent    | en     | 0.80 | 0.87 |    0.07 |
+| qwen3-8b       | agent    | ka     | 0.73 | 0.67 |   -0.07 |
+
+## Reasoning group vs everyone, on the same subset
+
+Reasoning models run on a fixed subset (30 grammar zero-shot + 30 Belebele items per language). Here every model is scored on exactly those items.
+
+| model                | reasoning   |   belebele acc (en) |   belebele acc (ka) |   grammar EM (en) |   grammar EM (ka) |
+|:---------------------|:------------|--------------------:|--------------------:|------------------:|------------------:|
+| aya-expanse-8b       | False       |                0.90 |                0.40 |              0.80 |              0.30 |
+| aya-expanse-8b-q8    | False       |                0.97 |                0.30 |              0.77 |              0.19 |
+| bonsai-27b-2bit      | False       |                1.00 |                0.43 |              1.00 |              0.22 |
+| devstral-small-2-24b | False       |                0.90 |                0.63 |              0.93 |              0.41 |
+| gemma4-12b-qat       | False       |                0.97 |                0.80 |              1.00 |              0.70 |
+| gemma4-26b-qat       | False       |                1.00 |                0.80 |              0.97 |              0.78 |
+| gemma4-e4b           | False       |                0.77 |                0.63 |              1.00 |              0.78 |
+| glm4.7-flash         | False       |                0.87 |                0.63 |              0.97 |              0.67 |
+| gpt-oss-20b          | False       |                1.00 |                0.80 |              0.97 |              0.37 |
+| granite3.2-8b        | False       |                0.80 |                0.27 |              0.73 |              0.00 |
+| lfm2-24b-a2b         | False       |                0.83 |                0.10 |              0.80 |              0.00 |
+| llama3.1-8b          | False       |                0.83 |                0.40 |              0.77 |              0.41 |
+| llama3.1-8b-q8       | False       |                0.93 |                0.50 |              0.77 |              0.44 |
+| ministral3-3b        | False       |                0.70 |                0.50 |              0.57 |              0.15 |
+| nemotron3-nano-4b    | False       |                0.83 |                0.37 |              0.80 |              0.04 |
+| qwen3-8b             | False       |                0.90 |                0.57 |              0.87 |              0.52 |
+| qwen3-8b-q8          | False       |                0.87 |                0.53 |              0.90 |              0.52 |
+| qwen3.6-27b          | False       |                1.00 |                0.87 |              1.00 |              0.81 |
+| qwen3.8-27b          | False       |                1.00 |                0.97 |              1.00 |              0.67 |
+| deepseek-r1-qwen3-8b | True        |                0.80 |                0.30 |              0.73 |              0.04 |
+| qwen3-8b-think       | True        |                0.97 |                0.80 |              0.90 |              0.30 |
+| qwen3.6-27b-think    | True        |                1.00 |                0.93 |            nan    |            nan    |
+
+### Agent success by scenario type
+
+| type        |   aya-expanse-8b (en) |   aya-expanse-8b (ka) |   aya-expanse-8b-q8 (en) |   aya-expanse-8b-q8 (ka) |   bonsai-27b-2bit (en) |   bonsai-27b-2bit (ka) |   deepseek-r1-qwen3-8b (en) |   deepseek-r1-qwen3-8b (ka) |   devstral-small-2-24b (en) |   devstral-small-2-24b (ka) |   gemma4-12b-qat (en) |   gemma4-12b-qat (ka) |   gemma4-26b-qat (en) |   gemma4-26b-qat (ka) |   gemma4-e4b (en) |   gemma4-e4b (ka) |   glm4.7-flash (en) |   glm4.7-flash (ka) |   gpt-oss-20b (en) |   gpt-oss-20b (ka) |   granite3.2-8b (en) |   granite3.2-8b (ka) |   lfm2-24b-a2b (en) |   lfm2-24b-a2b (ka) |   llama3.1-8b (en) |   llama3.1-8b (ka) |   llama3.1-8b-q8 (en) |   llama3.1-8b-q8 (ka) |   ministral3-3b (en) |   ministral3-3b (ka) |   nemotron3-nano-4b (en) |   nemotron3-nano-4b (ka) |   qwen3-8b (en) |   qwen3-8b (ka) |   qwen3-8b-q8 (en) |   qwen3-8b-q8 (ka) |   qwen3-8b-think (en) |   qwen3-8b-think (ka) |   qwen3.6-27b (en) |   qwen3.6-27b (ka) |   qwen3.8-27b (en) |   qwen3.8-27b (ka) |
+|:------------|----------------------:|----------------------:|-------------------------:|-------------------------:|-----------------------:|-----------------------:|----------------------------:|----------------------------:|----------------------------:|----------------------------:|----------------------:|----------------------:|----------------------:|----------------------:|------------------:|------------------:|--------------------:|--------------------:|-------------------:|-------------------:|---------------------:|---------------------:|--------------------:|--------------------:|-------------------:|-------------------:|----------------------:|----------------------:|---------------------:|---------------------:|-------------------------:|-------------------------:|----------------:|----------------:|-------------------:|-------------------:|----------------------:|----------------------:|-------------------:|-------------------:|-------------------:|-------------------:|
+| clarify     |                  0.00 |                  0.00 |                     0.00 |                     0.00 |                   0.50 |                   1.00 |                        0.50 |                        0.00 |                        1.00 |                        0.50 |                  1.00 |                  1.00 |                  1.00 |                  1.00 |              0.50 |              0.50 |                1.00 |                0.00 |               1.00 |               1.00 |                 0.50 |                 1.00 |                1.00 |                0.00 |               0.50 |               0.00 |                  0.50 |                  0.00 |                 1.00 |                 0.50 |                     1.00 |                     0.50 |            0.50 |            0.50 |               0.50 |               0.00 |                  1.00 |                  0.00 |               1.00 |               1.00 |               1.00 |               0.50 |
+| multi_step  |                  0.25 |                  0.25 |                     0.25 |                     0.25 |                   1.00 |                   0.50 |                        1.00 |                        0.25 |                        0.75 |                        0.25 |                  1.00 |                  0.75 |                  0.75 |                  0.50 |              1.00 |              0.75 |                0.75 |                0.75 |               0.75 |               1.00 |                 0.25 |                 0.00 |                1.00 |                0.00 |               0.25 |               0.25 |                  0.25 |                  0.25 |                 1.00 |                 0.50 |                     0.75 |                     0.00 |            0.75 |            0.75 |               1.00 |               0.75 |                  1.00 |                  1.00 |               1.00 |               1.00 |               1.00 |               1.00 |
+| no_tool     |                  0.50 |                  0.50 |                     0.50 |                     0.50 |                   1.00 |                   0.50 |                        1.00 |                        0.50 |                        1.00 |                        1.00 |                  1.00 |                  1.00 |                  1.00 |                  1.00 |              1.00 |              1.00 |                1.00 |                1.00 |               1.00 |               1.00 |                 1.00 |                 0.50 |                0.50 |                0.50 |               0.00 |               0.50 |                  0.50 |                  0.50 |                 1.00 |                 0.50 |                     1.00 |                     0.50 |            1.00 |            1.00 |               1.00 |               1.00 |                  0.50 |                  1.00 |               1.00 |               1.00 |               1.00 |               1.00 |
+| reasoning   |                  0.50 |                  0.50 |                     1.00 |                     0.50 |                   0.50 |                   0.50 |                        1.00 |                        0.50 |                        0.50 |                        1.00 |                  1.00 |                  1.00 |                  1.00 |                  1.00 |              1.00 |              0.50 |                1.00 |                1.00 |               0.50 |               0.50 |                 0.50 |                 0.50 |                1.00 |                0.00 |               0.50 |               0.50 |                  0.50 |                  0.00 |                 0.50 |                 1.00 |                     0.00 |                     0.50 |            1.00 |            0.50 |               1.00 |               0.50 |                  1.00 |                  1.00 |               1.00 |               1.00 |               1.00 |               1.00 |
+| safety      |                  0.50 |                  0.50 |                     0.50 |                     0.50 |                   0.50 |                   0.50 |                        0.50 |                        0.00 |                        1.00 |                        0.50 |                  0.50 |                  1.00 |                  1.00 |                  1.00 |              0.50 |              0.50 |                1.00 |                0.50 |               1.00 |               0.00 |                 0.50 |                 0.00 |                1.00 |                0.00 |               0.50 |               0.50 |                  0.50 |                  0.50 |                 0.50 |                 0.50 |                     0.50 |                     0.50 |            0.50 |            0.50 |               0.50 |               0.50 |                  0.50 |                  0.50 |               1.00 |               1.00 |               1.00 |               1.00 |
+| single_tool |                  1.00 |                  1.00 |                     1.00 |                     1.00 |                   1.00 |                   1.00 |                        1.00 |                        0.67 |                        1.00 |                        1.00 |                  1.00 |                  1.00 |                  1.00 |                  1.00 |              1.00 |              1.00 |                1.00 |                0.67 |               1.00 |               1.00 |                 1.00 |                 0.00 |                1.00 |                0.33 |               1.00 |               0.67 |                  1.00 |                  0.33 |                 1.00 |                 1.00 |                     1.00 |                     0.67 |            1.00 |            1.00 |               1.00 |               1.00 |                  1.00 |                  1.00 |               1.00 |               1.00 |               1.00 |               1.00 |
+
+<!-- leaderboard:end -->
+
+## Models
+
+Everything runs on a **24 GB Apple Silicon Mac**, at 4-bit unless noted:
+
+| Model | Backend | Params | Notes |
+|---|---|---|---|
+| Nemotron 3 Nano | LM Studio | 4B | smallest |
+| Ministral 3 | LM Studio | 3B | 8-bit |
+| Gemma 4 E4B | LM Studio | 4B effective | on-device model |
+| Qwen3 8B | Ollama | 8B | Q4 and Q8 |
+| Llama 3.1 8B | Ollama | 8B | Q4 and Q8; worst tokenizer for Georgian |
+| Aya Expanse 8B | Ollama | 8B | Q4 and Q8; built for multilingual use |
+| Granite 3.2 | LM Studio | 8B | |
+| Gemma 4 12B QAT | LM Studio | 12B | quantization-aware trained |
+| Bonsai 27B | LM Studio | 27B, **2-bit** | heavy compression vs a smaller model at 4-bit |
+| LFM2 24B-A2B | LM Studio | 24B MoE (2B active) | very fast |
+| gpt-oss 20B | Ollama | 21B MoE | best tokenizer for Georgian; always reasons |
+| Qwen 3.6 27B, Qwen 3.8 27B | LM Studio | 27B | big models, see below |
+| Devstral Small 2 | LM Studio | 24B | big model, coding-focused |
+| GLM 4.7 Flash | LM Studio | 30B MoE (3B active) | big model, run at 4k context |
+| Gemma 4 26B A4B QAT | LM Studio | 26B MoE (4B active) | big model, quantization-aware trained |
+
+**Reasoning group**, run on a fixed subset (30 grammar + 30 Belebele items per language, all agent scenarios): Qwen3 8B with thinking on, and DeepSeek R1 0528 (Qwen3 8B distill). Qwen 3.6 27B with thinking on ran Belebele only (30 questions per language): at ~10 tok/s, a 4k-token thinking budget makes grammar and agent runs take many hours. Phi-4 mini reasoning and Phi-4 reasoning plus are opt-in: the mini model thinks in loops on Georgian until it runs out of tokens.
+
+**Big models** (16-18 GB) are opt-in in `scripts/run_queue.sh`. They need Docker stopped, the GPU limit raised to 22 GB and LM Studio's loading guardrails set to Off, then the results are pushed to Langfuse afterwards with `kabench upload`. A vLLM entry in `configs/models.yaml` shows how to run models on a rented GPU instead.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph data[Datasets]
+        G[grammar_ka / grammar_en]
+        B[Belebele ka + en]
+        S[agent scenarios]
+    end
+    subgraph kabench[kabench CLI]
+        T[tracks: grammar · comprehension · tokens · agent]
+        R[runner + speed guard]
+        SC[deterministic scorers]
+        REP[report]
+    end
+    subgraph backends[OpenAI-compatible backends]
+        O[Ollama]
+        L[LM Studio]
+        V["vLLM (GPU box)"]
+    end
+    LF[(Langfuse, self-hosted<br/>datasets · experiments · traces · scores)]
+    data --> T --> R
+    R -- langfuse.openai client --> backends
+    R -- run_experiment + scores --> LF
+    R --> SC
+    R --> J[results/runs/*.jsonl] --> REP --> MD[leaderboard + charts]
+```
+
+Every backend speaks the OpenAI chat-completions API, so a model is just a `base_url` + `model_id` in [`configs/models.yaml`](configs/models.yaml). Each model/prompt/language combination becomes a Langfuse **dataset run** with item-level scores, so runs can be compared side by side in the Langfuse UI. Agent runs are nested traces, with one span per tool call.
+
+## Quickstart
+
+Requirements: [uv](https://docs.astral.sh/uv/), Docker, and Ollama and/or LM Studio.
+
+```bash
+# 1. Python environment
+uv sync
+
+# 2. Langfuse, self-hosted. The project, API keys and login are created on first boot.
+cp docker/langfuse/.env.example docker/langfuse/.env
+docker compose -f docker/langfuse/docker-compose.yml -f docker/langfuse/docker-compose.override.yml \
+  --project-directory docker/langfuse up -d
+cp .env.example .env            # UI: http://localhost:3000  (admin@kabench.local / kabench-admin)
+
+# 3. A model
+ollama pull qwen3:8b
+scripts/make_ollama_aliases.sh qwen3:8b    # creates kb-qwen3-8b with an 8k context
+
+# 4. Run
+uv run kabench models                          # configured models
+uv run kabench discover                        # models on running servers that aren't configured yet
+uv run kabench grammar -m qwen3-8b --limit 5   # smoke test
+uv run kabench tokens                          # tokenizer comparison, no server needed
+uv run pytest                                  # scorer and agent-check unit tests
+```
+
+Without Langfuse keys in `.env`, everything still runs and writes to `results/runs/`.
+
+### Full benchmark
+
+```bash
+scripts/run_queue.sh                  # every model in the queue, smallest first
+scripts/run_queue.sh qwen3-8b gpt-oss-20b   # or just some of them
+```
+
+The script keeps exactly one model in memory, loads each with an 8k context, skips Ollama models that don't fit fully on the GPU, and logs a summary of anything skipped or aborted. Inside `kabench`, a **speed guard** stops a model that keeps decoding under 3 tok/s (a sign of swapping), discards its partial run, and lets the script move on. At the end it rebuilds the report.
+
+### Checking the answers
+
+```bash
+uv run kabench review     # writes results/review.html
+```
+
+One page with every test item, its expected answer and every model's answer (agent runs include each tool call and its result). Filter by track, language or prompt, jump to the items most models failed, and mark each item as correct or as a problem; marks and notes stay in the browser and can be exported as JSON.
+
+## Design notes
+
+- **Fair comparisons.** Belebele and FLORES are professionally translated parallel data, so both languages get identical questions and passages. The agent scenarios have the same expectations in both languages.
+- **Over-correction is a first-class metric.** About a third of the Georgian grammar set is already correct: III-series verbs with dative subjects, valid double negatives, free word order, indefinite pronouns. A proofreader that "fixes" these is worse than useless.
+- **Test-set leakage is guarded against.** The original few-shot prompt used test sentences as examples. Those items are excluded automatically when that prompt is evaluated.
+- **Deterministic agent scoring, no LLM-as-judge.** The checks cover tool choice, arguments (with per-language expectations: a Georgian event title must stay Georgian), forbidden side effects, clarification questions and reply language. Clarification and safety scenarios fail if the model takes *any* side-effecting action.
+- **Morphology-aware mock tools.** Contact search tolerates Georgian case suffixes (`გიორგის` → `გიორგი`), so failures reflect the model, not a naive search tool.
+- **Tool-call format is not the test.** Some models emit calls in their own dialect: Granite writes `<tool_call>[…]` as plain text, Aya wraps arguments in `{"tool_name": …, "parameters": {…}}`. The harness accepts both, but only when the reply is nothing but well-formed calls. The `text_tool_calls` column shows how often a model needed this.
+- **Safety scenarios** include a large-transfer confirmation rule and a prompt injection hidden in a tool result.
+- **Thinking is off for every model** (`reasoning_effort: none`), so speed and token counts are comparable. Thinking cost is measured separately with a dedicated Qwen3 variant.
+
+## Running LLMs on a 24 GB Mac: what I learned
+
+- **The GPU memory limit is lower than the RAM.** By default, macOS lets the GPU use about 75% of RAM (~17.8 GB of 24 GB). `sudo sysctl iogpu.wired_limit_mb=20480` raises it until the next reboot. LM Studio and Ollama only read the limit at startup, so **restart both** afterwards.
+- **Context length matters for memory.** Ollama defaults to a 4k context and silently truncates longer prompts, so the queue uses `kb-*` aliases with `num_ctx 8192`. Bigger contexts reserve memory for nothing on this workload.
+- **The observability stack competes with the model.** Langfuse's containers are memory-capped in `docker-compose.override.yml` (~4 GB in practice). The web container needs about 2 GB to start; below that, Node runs out of heap.
+- **Watch swap, not just "fits on GPU".** A 17 GB model showed `100% GPU` in Ollama, but still stalled for 40+ seconds per answer because macOS was swapping other processes out. The speed guard exists because of this.
+- **Big models need everything else out of the way.** The 16-18 GB models (Qwen 3.6/3.8 27B, Devstral, GLM 4.7 Flash) ran only with Docker fully quit, `iogpu.wired_limit_mb=22528` and LM Studio's loading guardrails turned off: LM Studio estimates the 27B vision models at ~21 GiB and refuses them even at a 4k context, though they actually leave ~25% of RAM free. Runs are saved locally and replayed into Langfuse afterwards (`kabench upload -m <model>`).
+- **LM Studio's guardrail labels differ from its config file.** The setting stored as `"high"` is shown as *Relaxed* in the app.
+- **iCloud Drive breaks Python venvs.** If the project is inside an iCloud-synced Documents folder, iCloud marks `.venv/*.pth` as hidden and Python skips them (`ModuleNotFoundError`). Keep the venv in an excluded directory: `mkdir .venv.nosync && ln -s .venv.nosync .venv && uv sync`.
+
+## Project layout
+
+```
+configs/models.yaml           models: backend URL, model id, HF tokenizer, extra params
+data/                         grammar_{ka,en}.jsonl, agent_scenarios.jsonl
+prompts/grammar/{ka,en}/      prompt variants (zero_shot, few_shot, ...)
+src/kabench/                  client, runner (+ speed guard), scorers, report, CLI
+src/kabench/tracks/           grammar, comprehension, tokens, agent (+ mock tool world)
+scripts/run_queue.sh          full benchmark, one model at a time
+scripts/make_ollama_aliases.sh  8k-context kb-* aliases for Ollama models
+docker/langfuse/              official Langfuse compose + local override
+results/                      runs/*.jsonl, tokens_*.csv, LEADERBOARD.md, charts/
+legacy/                       the original 2025 scripts this project grew from
+tests/                        unit tests
+```
+
+## Origin
+
+This started in 2025 as a few scripts that sent Georgian sentences to a local Qwen 2.5 model and printed the corrections to a Markdown table, to be checked by eye (see [`legacy/`](legacy/)). kabench turns that into a measured, reproducible benchmark: real scoring, parallel English baselines, multiple backends, tracing, and agent and tokenizer tracks.
+
+## Limitations and roadmap
+
+- The datasets are small (v1). The Georgian grammar labels have been reviewed by a native speaker (three unclear items dropped); the Georgian agent prompts have not.
+- The agent system prompt is English only; a Georgian system prompt is a natural next variant.
+- Quantization formats differ between backends (GGUF Q4_K_M vs MLX 4-bit). Treat cross-backend comparisons with care.
+- Next: **Q4 vs Q8** on the same models, to test whether quantization hurts Georgian more than English. Also larger models on a rented GPU via vLLM, and syncing the prompts into Langfuse prompt management.

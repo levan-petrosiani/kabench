@@ -1,0 +1,40 @@
+{"id": "gec-en-001", "lang": "en", "category": "unchanged", "input": "She gave me the book yesterday.", "expected": "She gave me the book yesterday."}
+{"id": "gec-en-002", "lang": "en", "category": "unchanged", "input": "We told them the truth.", "expected": "We told them the truth."}
+{"id": "gec-en-003", "lang": "en", "category": "unchanged", "input": "The man has seen this film before.", "expected": "The man has seen this film before."}
+{"id": "gec-en-004", "lang": "en", "category": "unchanged", "input": "Never have I seen such a beautiful view.", "expected": "Never have I seen such a beautiful view."}
+{"id": "gec-en-005", "lang": "en", "category": "unchanged", "input": "Somebody once told me something somewhere.", "expected": "Somebody once told me something somewhere."}
+{"id": "gec-en-006", "lang": "en", "category": "number", "input": "Five child came to the party.", "expected": "Five children came to the party."}
+{"id": "gec-en-007", "lang": "en", "category": "number", "input": "There is many people in the room.", "expected": "There are many people in the room."}
+{"id": "gec-en-008", "lang": "en", "category": "number", "input": "Each of the students have a book.", "expected": "Each of the students has a book."}
+{"id": "gec-en-009", "lang": "en", "category": "number", "input": "Forty apple were in the basket.", "expected": "Forty apples were in the basket."}
+{"id": "gec-en-010", "lang": "en", "category": "punctuation", "input": "Tbilisi which is the capital of Georgia is very beautiful.", "expected": "Tbilisi, which is the capital of Georgia, is very beautiful."}
+{"id": "gec-en-011", "lang": "en", "category": "punctuation", "input": "He said he would come but he didn't.", "expected": "He said he would come, but he didn't."}
+{"id": "gec-en-012", "lang": "en", "category": "punctuation", "input": "Its a nice day today.", "expected": "It's a nice day today."}
+{"id": "gec-en-013", "lang": "en", "category": "punctuation", "input": "However we decided to stay home.", "expected": "However, we decided to stay home."}
+{"id": "gec-en-014", "lang": "en", "category": "agreement", "input": "The children sees the cat and run away.", "expected": "The children see the cat and run away."}
+{"id": "gec-en-015", "lang": "en", "category": "agreement", "input": "She don't like coffee.", "expected": "She doesn't like coffee."}
+{"id": "gec-en-016", "lang": "en", "category": "agreement", "input": "The list of items are on the desk.", "expected": "The list of items is on the desk."}
+{"id": "gec-en-017", "lang": "en", "category": "tense", "input": "They build the house last year.", "expected": "They built the house last year."}
+{"id": "gec-en-018", "lang": "en", "category": "tense", "input": "I will wrote the book tomorrow.", "expected": "I will write the book tomorrow."}
+{"id": "gec-en-019", "lang": "en", "category": "tense", "input": "Yesterday she goes to the market.", "expected": "Yesterday she went to the market."}
+{"id": "gec-en-020", "lang": "en", "category": "orthography", "input": "The mistake is easy to recieve and hard to correct.", "expected": "The mistake is easy to receive and hard to correct."}
+{"id": "gec-en-021", "lang": "en", "category": "orthography", "input": "I definately agree with you.", "expected": "I definitely agree with you."}
+{"id": "gec-en-022", "lang": "en", "category": "orthography", "input": "The book is on the the table.", "expected": "The book is on the table."}
+{"id": "gec-en-023", "lang": "en", "category": "dative", "input": "The teacher explained the students the answer.", "expected": "The teacher explained the answer to the students."}
+{"id": "gec-en-024", "lang": "en", "category": "dative", "input": "Mother gave a toy her son.", "expected": "Mother gave her son a toy."}
+{"id": "gec-en-025", "lang": "en", "category": "parenthetical", "input": "This is of course the truth.", "expected": "This is, of course, the truth."}
+{"id": "gec-en-026", "lang": "en", "category": "parenthetical", "input": "He is it seems very tired.", "expected": "He is, it seems, very tired."}
+{"id": "gec-en-027", "lang": "en", "category": "conjunction", "input": "Not only he came but also his brother.", "expected": "Not only did he come, but also his brother."}
+{"id": "gec-en-028", "lang": "en", "category": "conjunction", "input": "Both the children as well as the adults played.", "expected": "Both the children and the adults played."}
+{"id": "gec-en-029", "lang": "en", "category": "redundancy", "input": "I I want to go home.", "expected": "I want to go home."}
+{"id": "gec-en-030", "lang": "en", "category": "redundancy", "input": "We went to the city and and rested.", "expected": "We went to the city and rested."}
+{"id": "gec-en-031", "lang": "en", "category": "double_negative", "input": "I don't know nothing about it.", "expected": "I don't know anything about it."}
+{"id": "gec-en-032", "lang": "en", "category": "double_negative", "input": "Nobody never told me.", "expected": "Nobody ever told me."}
+{"id": "gec-en-033", "lang": "en", "category": "word_order", "input": "Rarely do we see such talent.", "expected": "Rarely do we see such talent."}
+{"id": "gec-en-034", "lang": "en", "category": "word_order", "input": "The grass was cut by the man.", "expected": "The grass was cut by the man."}
+{"id": "gec-en-035", "lang": "en", "category": "superlative", "input": "This is the most best option.", "expected": "This is the best option."}
+{"id": "gec-en-036", "lang": "en", "category": "superlative", "input": "She is more taller than her sister.", "expected": "She is taller than her sister."}
+{"id": "gec-en-037", "lang": "en", "category": "article", "input": "I saw a elephant at the zoo.", "expected": "I saw an elephant at the zoo."}
+{"id": "gec-en-038", "lang": "en", "category": "article", "input": "She is best student in the class.", "expected": "She is the best student in the class."}
+{"id": "gec-en-039", "lang": "en", "category": "misc", "input": "Me and him went to the store.", "expected": "He and I went to the store."}
+{"id": "gec-en-040", "lang": "en", "category": "misc", "input": "He realized that his whole life had been wasted", "expected": "He realized that his whole life had been wasted."}

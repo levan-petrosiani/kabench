@@ -1,0 +1,8 @@
+tokenizer,ka_tokens,ka_tokens_per_word,ka_chars_per_token,en_tokens,en_tokens_per_word,en_chars_per_token,ka_en_ratio,repo
+gpt-oss,83670,2.763,3.043,46922,1.224,4.945,1.783,openai/gpt-oss-20b
+gemma3,109553,3.618,2.324,47471,1.238,4.888,2.308,unsloth/gemma-3-12b-it
+mistral-nemo,116930,3.861,2.178,48623,1.269,4.772,2.405,unsloth/Mistral-Nemo-Instruct-2407
+deepseek-v3,186444,6.157,1.366,47204,1.231,4.916,3.950,deepseek-ai/DeepSeek-V3
+qwen3,253182,8.360,1.006,48219,1.258,4.812,5.251,Qwen/Qwen3-8B
+phi4,466938,15.419,0.545,47400,1.237,4.896,9.851,microsoft/phi-4
+llama3.1,466930,15.418,0.545,47383,1.236,4.897,9.854,unsloth/Llama-3.1-8B-Instruct
