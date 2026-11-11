@@ -171,5 +171,8 @@ def upload(path) -> str:
     def scorer(*, input, **_) -> dict:
         return stored[json.dumps(input, ensure_ascii=False)]["scores"]
 
-    _run_langfuse(f"{DATASET_PREFIX[first['track']]}-{first['lang']}", items, task, scorer, first["run"], meta)
+    prefix = DATASET_PREFIX[first["track"]]
+    if first["variant"].startswith("tools-long"):  # the long agent suite has its own dataset, as in run_agent
+        prefix = "kabench-agent-long"
+    _run_langfuse(f"{prefix}-{first['lang']}", items, task, scorer, first["run"], meta)
     return first["run"]

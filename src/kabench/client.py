@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from functools import cache
 
 from .config import ModelSpec, langfuse_enabled
+from .scorers import georgian_ratio
 
 THINK_RE = re.compile(r"<think>(.*?)</think>", re.DOTALL)
 
@@ -21,6 +22,7 @@ class ChatResult:
     reasoning: str = ""
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    reasoning_tokens: int | None = None  # only some servers report it
     latency_s: float = 0.0
     tool_calls: list = field(default_factory=list)
     message: dict | None = None  # raw assistant message, for agent loops
@@ -32,7 +34,10 @@ class ChatResult:
 
     def to_output(self, **extra) -> dict:
         """JSON-serializable task output, as stored in Langfuse and results/runs."""
-        return {"text": self.text, "reasoning_chars": len(self.reasoning),
+        # The reasoning text and its language show whether a model thinks in Georgian or English
+        return {"text": self.text, "reasoning": self.reasoning or None, "reasoning_chars": len(self.reasoning),
+                "reasoning_ka_ratio": round(georgian_ratio(self.reasoning), 3) if self.reasoning else None,
+                "reasoning_tokens": self.reasoning_tokens,
                 "prompt_tokens": self.prompt_tokens, "completion_tokens": self.completion_tokens,
                 "latency_s": round(self.latency_s, 3), "tokens_per_s": round(self.tokens_per_s, 1),
                 "error": self.error, **extra}
@@ -80,11 +85,13 @@ def chat(spec: ModelSpec, messages: list[dict], tools: list[dict] | None = None,
         text = THINK_RE.sub("", text)
 
     usage = resp.usage
+    details = getattr(usage, "completion_tokens_details", None) if usage else None
     return ChatResult(
         text=text.strip(),
         reasoning=reasoning.strip(),
         prompt_tokens=usage.prompt_tokens if usage else 0,
         completion_tokens=usage.completion_tokens if usage else 0,
+        reasoning_tokens=getattr(details, "reasoning_tokens", None),
         latency_s=latency,
         tool_calls=list(msg.tool_calls or []),
         message=msg.model_dump(exclude_none=True),

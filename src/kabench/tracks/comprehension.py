@@ -17,6 +17,14 @@ PROMPTS = {
 }
 
 
+# Modes for the English-core experiments (.ideas/NEXT-STEPS.md). Same items and scoring as `direct`.
+MODES = ("direct", "no-copy", "translate")
+NO_COPY = ("Think in English. Do not copy, quote or translate the passage, the question or the options in your "
+           "reasoning: refer to them directly. Reply exactly as the user asks.")
+TRANSLATE = ("Translate the following text into English. Keep the numbered options and the layout. "
+             "Do not answer the question. Reply with the translation only.\n\n{text}")
+
+
 def build_items(lang: str, n: int) -> list[dict]:
     items = []
     for pair in sample(n):
@@ -36,10 +44,36 @@ def score(*, output, expected_output, **_) -> dict:
     return {"accuracy": choice == int(expected_output), "parsed": choice is not None}
 
 
-def run_comprehension(spec: ModelSpec, lang: str, n: int = 100) -> list[dict]:
+def _translate_then_answer(spec: ModelSpec, prompt: str, lang: str) -> dict:
+    """Translate once with thinking off, then answer the English version with the model's usual settings."""
+    no_think = {**(spec.extra_body or {}), "reasoning_effort": "none"}
+    tr = chat(spec, [{"role": "user", "content": TRANSLATE.format(text=prompt)}], name=f"belebele-{lang}-translate",
+              extra_body=no_think, max_tokens=2048)
+    if tr.error:
+        return tr.to_output()
+    ans = chat(spec, [{"role": "user", "content": tr.text}], name=f"belebele-{lang}-answer")
+    # Totals cover both calls; the translation's share is kept so the answer's own thinking can be separated
+    out = ans.to_output(translation=tr.text, translation_prompt_tokens=tr.prompt_tokens,
+                        translation_completion_tokens=tr.completion_tokens)
+    out.update(prompt_tokens=tr.prompt_tokens + ans.prompt_tokens,
+               completion_tokens=tr.completion_tokens + ans.completion_tokens,
+               latency_s=round(tr.latency_s + ans.latency_s, 3))
+    return out
+
+
+def run_comprehension(spec: ModelSpec, lang: str, n: int = 100, mode: str = "direct") -> list[dict]:
+    if mode not in MODES:
+        raise ValueError(f"mode must be one of {MODES}")
+
     def task(item) -> dict:
         prompt = item["input"] if isinstance(item, dict) else item.input
-        return chat(spec, [{"role": "user", "content": prompt}], name=f"belebele-{lang}").to_output()
+        if mode == "translate" and lang != "en":
+            return _translate_then_answer(spec, prompt, lang)
+        messages = [{"role": "user", "content": prompt}]
+        if mode == "no-copy":
+            messages.insert(0, {"role": "system", "content": NO_COPY})
+        return chat(spec, messages, name=f"belebele-{lang}").to_output()
 
-    return run(track="comprehension", spec=spec, variant="belebele", lang=lang,
+    variant = "belebele" if mode == "direct" else f"belebele-{mode}"
+    return run(track="comprehension", spec=spec, variant=variant, lang=lang,
                dataset=f"kabench-belebele-{lang}", items=build_items(lang, n), task=task, scorer=score)

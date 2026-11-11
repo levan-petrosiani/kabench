@@ -14,6 +14,7 @@
 #
 # Usage: scripts/run_queue.sh [model ...]   (default: every model below)
 #        TRACK=agent scripts/run_queue.sh aya-expanse-8b   (rerun one track only)
+#        KABENCH_RUNS_DIR=results/experiments/x TRACK="agent --suite long" scripts/run_queue.sh qwen3.6-27b
 # Log:   .cache/logs/queue-summary.txt lists what finished, was skipped or aborted
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -150,8 +151,11 @@ for entry in "${QUEUE[@]}"; do
 done
 unload_all
 
-log "report"
-uv run kabench tokens   # refresh offline tokenizer table
-uv run kabench report
+# Experiment runs (KABENCH_RUNS_DIR) must not rebuild the leaderboard from the experiment folder
+if [[ -z ${KABENCH_RUNS_DIR:-} ]]; then
+  log "report"
+  uv run kabench tokens   # refresh offline tokenizer table
+  uv run kabench report
+fi
 log "finished"
 cat "$SUMMARY"

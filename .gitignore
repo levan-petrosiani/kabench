@@ -7,3 +7,4 @@ docker/langfuse/.env
 .venv.nosync/
 kabench_tests_for_gemini.md
 results/review.html
+.ideas/

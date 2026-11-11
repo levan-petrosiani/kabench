@@ -14,6 +14,11 @@ import pandas as pd
 from .config import RESULTS_DIR, ROOT, RUNS_DIR
 
 CHARTS_DIR = RESULTS_DIR / "charts"
+LONG_INTRO = ("10 scenarios per language (`data/agent_long_scenarios.jsonl`): inbox, calendar, notes and forecast "
+              "tools whose results are Georgian in the Georgian runs, and 3 scripted multi-turn conversations "
+              "(confirm before paying, ask which Nino, then act). Run with `kabench agent --suite long`. "
+              "`context Δ` = extra prompt tokens per step in Georgian (reading); `generated ×` = Georgian vs "
+              "English tokens written per scenario (writing).\n")
 LANG_COLORS = {"en": "#2a78d6", "ka": "#eb6834"}  # categorical slots 1-2
 LANG_LABELS = {"en": "English", "ka": "Georgian"}
 INK, MUTED, GRID = "#0b0b0b", "#52514e", "#e4e3df"
@@ -171,6 +176,26 @@ def chart_overview(t: pd.DataFrame):
     _save(fig, "overview.png")
 
 
+def long_agent_table(a_long: pd.DataFrame) -> pd.DataFrame:
+    """Long agent suite: success per language, and where Georgian costs more: reading (prompt tokens per step,
+    the re-read context) vs writing (generated tokens per scenario)."""
+    by = a_long.set_index(["model", "lang"])
+    rows = []
+    for model in a_long["model"].unique():
+        if (model, "ka") not in by.index or (model, "en") not in by.index:
+            continue
+        ka, en = by.loc[(model, "ka")], by.loc[(model, "en")]
+        per_step = {lg: r["prompt_tokens"] / r["steps"] for lg, r in (("ka", ka), ("en", en))}
+        rows.append({"model": model, "success ka": ka["success"], "95% CI ka": ka["95% CI"],
+                     "success en": en["success"], "95% CI en": en["95% CI"],
+                     "context per step ka": round(per_step["ka"]), "context per step en": round(per_step["en"]),
+                     "context Δ": f"{per_step['ka'] / per_step['en'] - 1:+.0%}",
+                     "generated ka": round(ka["completion_tokens"]), "generated en": round(en["completion_tokens"]),
+                     "generated ×": f"{ka['completion_tokens'] / en['completion_tokens']:.1f}×",
+                     "seconds ka": round(ka["latency_s"]), "seconds en": round(en["latency_s"])})
+    return pd.DataFrame(rows).sort_values(["success ka", "success en"], ascending=False) if rows else pd.DataFrame()
+
+
 def quant_table(grammar: pd.DataFrame, comp: pd.DataFrame, agent: pd.DataFrame) -> pd.DataFrame:
     """Pair every `<name>-q8` with `<name>` and show per-language score deltas."""
     metrics = [("grammar", grammar, "exact_match", "zero_shot"), ("belebele", comp, "accuracy", None),
@@ -191,7 +216,8 @@ def quant_table(grammar: pd.DataFrame, comp: pd.DataFrame, agent: pd.DataFrame) 
 
 def subset_table(runs: pd.DataFrame) -> pd.DataFrame:
     """Score every model on the items the reasoning group ran (they are nested subsets)."""
-    sel = runs[((runs["track"] == "grammar") & (runs["variant"] == "zero_shot")) | (runs["track"] == "comprehension")]
+    sel = runs[((runs["track"] == "grammar") & (runs["variant"] == "zero_shot"))
+               | ((runs["track"] == "comprehension") & (runs["variant"] == "belebele"))]
     counts = sel.groupby(["model", "track", "lang"])["item_id"].transform("count")
     full = counts.groupby([sel["track"], sel["lang"]]).transform("max")
     reduced = sel[counts < full]
@@ -235,13 +261,21 @@ def build_report():
         chart_lang_pair(g[g["variant"] == "zero_shot"] if not g.empty else g, "exact_match",
                         "Grammar correction (zero-shot prompt): exact match", "grammar.png", lambda v: f"{v:.0%}")
         c = summarize(runs, "comprehension", ["scores.accuracy", "scores.parsed"], ci="scores.accuracy")
-        chart_lang_pair(c, "accuracy", "Belebele reading comprehension: accuracy", "comprehension.png",
+        # Headline views use the main variants only; experiment modes and the long agent suite get their own rows
+        c_main = c[c["variant"] == "belebele"] if not c.empty else c
+        chart_lang_pair(c_main, "accuracy", "Belebele reading comprehension: accuracy", "comprehension.png",
                         lambda v: f"{v:.0%}")
         a = summarize(runs, "agent", ["scores.success", "scores.language_match", "scores.steps",
                                       "scores.invalid_calls", "scores.total_tokens"], ci="scores.success")
-        chart_lang_pair(a, "success", "Agent scenarios: task success", "agent.png", lambda v: f"{v:.0%}")
+        a_main = a[a["variant"] == "tools-v1"] if not a.empty else a
+        chart_lang_pair(a_main, "success", "Agent scenarios: task success", "agent.png", lambda v: f"{v:.0%}")
+        a_long = a[a["variant"] == "tools-long-v1"] if not a.empty else a
+        long_tbl = long_agent_table(a_long) if not a_long.empty else pd.DataFrame()
+        if not long_tbl.empty:
+            chart_lang_pair(a_long, "success", "Long agent scenarios (multi-step, multi-turn): task success",
+                            "agent_long.png", lambda v: f"{v:.0%}")
 
-        if not (ov := overview_table(g, c, a, runs)).empty:
+        if not (ov := overview_table(g, c_main, a_main, runs)).empty:
             chart_overview(ov)
             sections += ["\n## Overview\n", "![overview](charts/overview.png)\n",
                          "Headline metric per track: grammar exact match (zero-shot prompt), Belebele accuracy, "
@@ -253,6 +287,9 @@ def build_report():
                       "comparison, the reasoning subset, agent results by scenario type and token cost on each "
                       "backend: **[results/LEADERBOARD.md](results/LEADERBOARD.md)**. To read every answer, "
                       "run `uv run kabench review`."]
+            if not long_tbl.empty:
+                cols = ["model", "success ka", "success en", "context Δ", "generated ×", "seconds ka", "seconds en"]
+                readme += ["\n### Long agent scenarios\n", LONG_INTRO, _md(long_tbl[cols])]
         sections += ["\n## How big a difference is real?\n",
                      "Every score comes with a 95% Wilson interval in the tables below. With 15 agent scenarios "
                      "one scenario is ~7 points, and a 60% score has an interval of roughly 36–80%; with 100 "
@@ -262,8 +299,12 @@ def build_report():
                      "`missed` = share of wrong sentences returned unchanged; "
                      "`gain` = edit-distance progress towards the gold sentence.\n", _md(g),
                      "\n## Reading comprehension (Belebele)\n", "![comprehension](charts/comprehension.png)\n", _md(c),
-                     "\n## Agent behaviour\n", "![agent](charts/agent.png)\n", _md(a)]
-        if not (q := quant_table(g, c, a)).empty:
+                     "\n## Agent behaviour\n", "![agent](charts/agent.png)\n", _md(a_main)]
+        if not long_tbl.empty:
+            sections += ["\n## Long agent scenarios\n", "![long agent](charts/agent_long.png)\n", LONG_INTRO,
+                         "`context per step` = prompt tokens per model call (the conversation re-read at every "
+                         "step); `generated` = tokens the model wrote per scenario.\n", _md(long_tbl)]
+        if not (q := quant_table(g, c_main, a_main)).empty:
             sections += ["\n## Quantization: Q4 vs Q8\n",
                          "Same model, 4-bit vs 8-bit weights. Δ = Q8 − Q4: does quantization hurt Georgian more than English?\n",
                          _md(q)]
@@ -271,7 +312,7 @@ def build_report():
             sections += ["\n## Reasoning group vs everyone, on the same subset\n",
                          "Reasoning models run on a fixed subset (30 grammar zero-shot + 30 Belebele items per language). "
                          "Here every model is scored on exactly those items.\n", _md(r)]
-        if not (ag := runs[runs["track"] == "agent"]).empty:
+        if not (ag := runs[(runs["track"] == "agent") & (runs["variant"] == "tools-v1")]).empty:
             ag = ag.assign(success=_mean(ag, "scores.success"))
             by_type = ag.pivot_table(index="metadata.type", columns=["model", "lang"], values="success")
             by_type.columns = [f"{m} ({lg})" for m, lg in by_type.columns]

@@ -9,7 +9,8 @@ ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = ROOT / "data"
 PROMPTS_DIR = ROOT / "prompts"
 RESULTS_DIR = ROOT / "results"
-RUNS_DIR = RESULTS_DIR / "runs"
+# Experiments write elsewhere so they never replace leaderboard runs
+RUNS_DIR = Path(os.environ["KABENCH_RUNS_DIR"]).resolve() if os.getenv("KABENCH_RUNS_DIR") else RESULTS_DIR / "runs"
 
 load_dotenv(ROOT / ".env")
 os.environ.setdefault("HF_HOME", str(ROOT / ".cache" / "hf"))

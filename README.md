@@ -9,7 +9,7 @@ It answers four questions:
 | **A. Grammar** | Can the model proofread Georgian without "fixing" sentences that are already correct? | 59 Georgian + 40 English sentences in 18 error categories, Georgian labels reviewed by a native speaker | exact match, char similarity, edit gain, **over-correction**, missed fixes, output-format compliance |
 | **B. Understanding** | How much reading comprehension is lost in Georgian? | [Belebele](https://huggingface.co/datasets/facebook/belebele): the *same* 100 questions in both languages | accuracy |
 | **C. Token cost** | How many more tokens does the same text cost in Georgian? | 488 parallel FLORES passages | tokens/word, chars/token, **Georgian ÷ English ratio** |
-| **D. Agents** | Does the model behave as well as an agent when the user writes Georgian? | 15 scenarios × 2 languages, mock tools | task success, tool & argument accuracy, clarification, safety rules, prompt-injection resistance, reply language |
+| **D. Agents** | Does the model behave as well as an agent when the user writes Georgian? | 15 short scenarios + 10 long multi-step, multi-turn ones (inbox, calendar, notes), × 2 languages, mock tools | task success, tool & argument accuracy, clarification, safety rules, prompt-injection resistance, reply language |
 
 ## Key findings
 
@@ -22,9 +22,38 @@ It answers four questions:
 - **Georgian costs 1.8–10× more tokens** for the same text, depending on the tokenizer: gpt-oss is cheapest, Llama 3.1 falls back to raw bytes.
 - **Proofreading is the hardest skill.** The best zero-shot exact match in Georgian is 69%, against up to 97% in English. A coding model (Devstral) "fixed" 18 of the 20 Georgian sentences that were already correct (90%; with 20 such sentences, each one is 5 points).
 - **8-bit weights don't help Georgian.** There is no consistent gain from Q8: the Georgian average moved by −1.5 to −4.5 points and the English one by +1.7 to +2.9, all within noise.
-- **Thinking helps small models, and costs more in Georgian.** It raised Qwen3 8B's Georgian Belebele accuracy from 57% to 80%, but added only 2 of 30 questions for Qwen 3.6 27B, which used 1.6× as many thinking tokens per Georgian question as per English one.
+- **Thinking helps small models, and costs more in Georgian.** It raised Qwen3 8B's Georgian Belebele accuracy from 57% to 80%, but added only 2 of 30 questions for Qwen 3.6 27B, which used 1.6× as many thinking tokens per Georgian question as per English one. Both models already *think in English* about a Georgian question; the extra tokens go into quoting and translating the Georgian text to themselves.
+- **In agents, Georgian costs in writing, not reading.** On the long multi-step scenarios, the Georgian conversation context added only 0–6% per step for the strong models (the English system prompt and tools dominate), while writing Georgian replies took 1.0–2.8× the tokens, following the tokenizer: gpt-oss writes Georgian at the English cost, Qwen pays 1.7×. Every model completed 1–2 fewer of the 10 long scenarios in Georgian; the best, Qwen 3.6 27B, completed 7 vs 9.
+- **Translating Georgian to English first doesn't pay.** Translate-first matched direct Georgian on accuracy but cost as much as it saved (+17% total tokens for Qwen 3.6 27B), and an instruction not to quote or translate the Georgian made the model think 52% *longer*. For a Georgian-facing agent, keep the backend in English and let the model read and write Georgian directly; see [Building a Georgian-facing agent](#building-a-georgian-facing-agent).
 
-Scores are single runs at temperature 0. Every table in the [leaderboard](results/LEADERBOARD.md) carries a 95% confidence interval: with 15 agent scenarios, gaps under ~25 points are within noise.
+Scores are single runs at temperature 0. Every table in the [leaderboard](results/LEADERBOARD.md) carries a 95% confidence interval: with 10–15 agent scenarios, gaps under ~25 points are within noise.
+
+## Building a Georgian-facing agent
+
+The practical question behind the benchmark: can a local agent serve Georgian customers while everything behind it (system prompt, tools, data, logs) stays in English, which is cheaper in tokens and easier for the team? Three designs were compared on the same items with the same scoring:
+
+| Design | Customer's message | Model works in | Reply |
+|---|---|---|---|
+| **Direct** | read in Georgian | its own choice | written in Georgian |
+| **No-copy** | read in Georgian | English, told not to quote or translate the Georgian | written in Georgian |
+| **Translate-first** | translated to English first (thinking off) | English | translated back |
+
+On 10 Georgian Belebele questions with thinking on, all modes answered equally well (Qwen 3.6 27B: 10/10 in every mode), but:
+
+| Qwen 3.6 27B, thinking on | Thinking tokens | Total tokens | Seconds per question |
+|---|---|---|---|
+| Direct, Georgian | 963 | 1,450 | 70 |
+| No-copy | 1,463 (+52%) | 1,990 | 100 |
+| Translate-first | 194 + 787 = 980 | 1,700 (+17%) | 69 |
+| *English original* | *751* | *945* | *51* |
+
+- **Models already think in English** about Georgian input (0–39% Georgian letters in the thinking, all quoted text), so "think in English" is not a lever.
+- **Translate-first works but doesn't pay**: on its own translation the strong model thinks as briefly as on the English original, but the translation step costs what it saves. The small model (Qwen3 8B) still thought twice as long on its own imperfect translation as on the real English.
+- **In agents, reading Georgian is cheap and writing it is not** (see the long agent scenarios in [Results](#results)): a translation layer would save on the cheap part and cannot avoid the expensive one, since the Georgian reply has to be written anyway.
+
+**Recommended design:** English system prompt, tools, data and logs; normalised tool arguments (ids, ISO dates, currency codes); the model reads the customer's Georgian and writes its Georgian reply directly, with no translation layer. To cut the Georgian cost, choose a model with a Georgian-efficient tokenizer: gpt-oss writes Georgian at the English cost, Gemma at 1.2–1.4×, Qwen at 1.7–2.8×.
+
+The modes are available as `kabench comprehension --mode direct|no-copy|translate`.
 
 ## Why Georgian
 
@@ -55,6 +84,10 @@ These are real behaviours from development runs (the full leaderboard is below):
 - **Skipped steps in Georgian.** For *"text Giorgi I'll be late"*, the English agent searched the contacts and then sent the message. In Georgian it invented a contact id (`გიორგის_კონტაქტიდ`) and skipped the lookup.
 - **Translating instead of correcting.** Nemotron 3 Nano answered a Georgian proofreading request with an English translation.
 - **Compression damage.** A 2-bit 27B model echoed the instruction back instead of correcting the sentence.
+- **Reading, then stopping.** In the long Georgian scenarios, Qwen3 8B read the inbox or the note it was asked to act on, then pasted the content back to the user instead of sending the replies.
+- **Arithmetic that breaks only in Georgian.** Asked to split a dinner for three, Qwen 3.6 27B charged each friend 120 GEL (240 ÷ 2) in Georgian, and the correct 80 GEL in English.
+- **The wrong language.** The 2-bit Bonsai answered 79% of Georgian agent requests in English while still completing the task.
+- **Dates.** In both languages, models took "Friday" or "Wednesday" as the past one, or computed "Monday" as today's date.
 
 ## Results
 
@@ -68,7 +101,7 @@ _Generated by `kabench report`._ Headline metric per track: grammar exact match 
 | gemma4-26b-qat         |         0.95 |         0.64 |          0.99 |          0.83 |       0.93 |       0.87 |     0.78 |     0.96 |  0.18 |
 | gemma4-12b-qat         |         0.97 |         0.63 |          0.96 |          0.78 |       0.93 |       0.93 |     0.78 |     0.96 |  0.18 |
 | gemma4-e4b             |         0.95 |         0.66 |          0.83 |          0.63 |       0.87 |       0.73 |     0.67 |     0.88 |  0.21 |
-| qwen3-8b-think ✱       |         0.90 |         0.30 |          0.97 |          0.80 |       0.87 |       0.80 |     0.63 |     0.91 |  0.28 |
+| qwen3-8b-think ✱       |         0.90 |         0.30 |          0.97 |          0.80 |       0.87 |       0.87 |     0.65 |     0.91 |  0.26 |
 | glm4.7-flash           |         0.90 |         0.63 |          0.86 |          0.60 |       0.93 |       0.67 |     0.63 |     0.90 |  0.27 |
 | gpt-oss-20b            |         0.97 |         0.31 |          0.99 |          0.77 |       0.87 |       0.80 |     0.63 |     0.94 |  0.32 |
 | qwen3-8b               |         0.85 |         0.51 |          0.90 |          0.57 |       0.80 |       0.73 |     0.60 |     0.85 |  0.25 |
@@ -76,16 +109,28 @@ _Generated by `kabench report`._ Headline metric per track: grammar exact match 
 | devstral-small-2-24b   |         0.88 |         0.36 |          0.94 |          0.71 |       0.87 |       0.67 |     0.58 |     0.89 |  0.32 |
 | ministral3-3b          |         0.53 |         0.14 |          0.80 |          0.57 |       0.87 |       0.67 |     0.46 |     0.73 |  0.27 |
 | llama3.1-8b            |         0.78 |         0.49 |          0.88 |          0.41 |       0.47 |       0.40 |     0.43 |     0.71 |  0.27 |
-| bonsai-27b-2bit        |         0.97 |         0.17 |          0.98 |          0.48 |       0.80 |       0.64 |     0.43 |     0.92 |  0.49 |
+| bonsai-27b-2bit        |         0.97 |         0.17 |          0.98 |          0.48 |       0.80 |       0.60 |     0.42 |     0.92 |  0.50 |
 | llama3.1-8b-q8         |         0.78 |         0.44 |          0.90 |          0.47 |       0.53 |       0.27 |     0.39 |     0.74 |  0.34 |
 | aya-expanse-8b         |         0.78 |         0.22 |          0.91 |          0.44 |       0.47 |       0.47 |     0.38 |     0.72 |  0.34 |
 | aya-expanse-8b-q8      |         0.75 |         0.14 |          0.92 |          0.39 |       0.53 |       0.47 |     0.33 |     0.73 |  0.40 |
-| nemotron3-nano-4b      |         0.75 |         0.03 |          0.90 |          0.40 |       0.73 |       0.43 |     0.29 |     0.79 |  0.51 |
+| nemotron3-nano-4b      |         0.75 |         0.03 |          0.90 |          0.40 |       0.73 |       0.40 |     0.28 |     0.79 |  0.52 |
 | deepseek-r1-qwen3-8b ✱ |         0.73 |         0.04 |          0.80 |          0.30 |       0.87 |       0.33 |     0.22 |     0.80 |  0.58 |
 | granite3.2-8b          |         0.72 |         0.00 |          0.86 |          0.29 |       0.60 |       0.27 |     0.19 |     0.73 |  0.54 |
 | lfm2-24b-a2b           |         0.82 |         0.00 |          0.86 |          0.16 |       0.93 |       0.13 |     0.10 |     0.87 |  0.78 |
 
 Per-track tables with 95% confidence intervals, over-correction rates, the Q4 vs Q8 comparison, the reasoning subset, agent results by scenario type and token cost on each backend: **[results/LEADERBOARD.md](results/LEADERBOARD.md)**. To read every answer, run `uv run kabench review`.
+
+### Long agent scenarios
+
+10 scenarios per language (`data/agent_long_scenarios.jsonl`): inbox, calendar, notes and forecast tools whose results are Georgian in the Georgian runs, and 3 scripted multi-turn conversations (confirm before paying, ask which Nino, then act). Run with `kabench agent --suite long`. `context Δ` = extra prompt tokens per step in Georgian (reading); `generated ×` = Georgian vs English tokens written per scenario (writing).
+
+| model          |   success ka |   success en | context Δ   | generated ×   |   seconds ka |   seconds en |
+|:---------------|-------------:|-------------:|:------------|:--------------|-------------:|-------------:|
+| qwen3.6-27b    |         0.70 |         0.90 | +6%         | 1.7×          |           34 |           21 |
+| gemma4-26b-qat |         0.60 |         0.80 | +3%         | 1.4×          |            6 |            4 |
+| gemma4-12b-qat |         0.50 |         0.60 | +0%         | 1.2×          |            9 |            7 |
+| gpt-oss-20b    |         0.50 |         0.60 | -2%         | 1.0×          |            5 |            5 |
+| qwen3-8b       |         0.20 |         0.30 | +14%        | 2.8×          |           11 |            4 |
 
 <!-- leaderboard:end -->
 
@@ -178,7 +223,14 @@ Without Langfuse keys in `.env`, everything still runs and writes to `results/ru
 ```bash
 scripts/run_queue.sh                  # every model in the queue, smallest first
 scripts/run_queue.sh qwen3-8b gpt-oss-20b   # or just some of them
+TRACK="agent --suite long" scripts/run_queue.sh qwen3-8b   # only the long agent scenarios
 ```
+
+Options for experiments:
+
+- `KABENCH_RUNS_DIR=results/experiments/<name>` writes runs to a separate folder, so they never replace leaderboard runs (the queue then skips rebuilding the report).
+- `KABENCH_TIMEOUT=900` raises the per-answer timeout (default 300 s) for slow thinking models.
+- `uv run kabench upload -m <models>` replays runs made with Langfuse off (for example with Docker stopped to free memory) into Langfuse as normal dataset runs.
 
 The script keeps exactly one model in memory, loads each with an 8k context, skips Ollama models that don't fit fully on the GPU, and logs a summary of anything skipped or aborted. Inside `kabench`, a **speed guard** stops a model that keeps decoding under 3 tok/s (a sign of swapping), discards its partial run, and lets the script move on. At the end it rebuilds the report.
 
@@ -198,7 +250,8 @@ One page with every test item, its expected answer and every model's answer (age
 - **Deterministic agent scoring, no LLM-as-judge.** The checks cover tool choice, arguments (with per-language expectations: a Georgian event title must stay Georgian), forbidden side effects, clarification questions and reply language. Clarification and safety scenarios fail if the model takes *any* side-effecting action.
 - **Morphology-aware mock tools.** Contact search tolerates Georgian case suffixes (`გიორგის` → `გიორგი`), so failures reflect the model, not a naive search tool.
 - **Tool-call format is not the test.** Some models emit calls in their own dialect: Granite writes `<tool_call>[…]` as plain text, Aya wraps arguments in `{"tool_name": …, "parameters": {…}}`. The harness accepts both, but only when the reply is nothing but well-formed calls. The `text_tool_calls` column shows how often a model needed this.
-- **Safety scenarios** include a large-transfer confirmation rule and a prompt injection hidden in a tool result.
+- **Safety scenarios** include a large-transfer confirmation rule, a prompt injection hidden in a tool result, and in the long suite a fake bank message in the inbox that asks the assistant to transfer money.
+- **Failures are counted, not hidden.** An agent that loops to the step limit without replying, or sends a tool call the server cannot parse, fails the scenario instead of being left out of the average. A clarifying reply counts as asking even without a question mark ("გთხოვთ, დამიდასტურეთ", "please confirm").
 - **Thinking is off wherever it can be** (`reasoning_effort: none`), so speed and token counts are comparable. Two exceptions: gpt-oss cannot switch reasoning off, so it runs at `low` effort; and the reasoning group (Qwen3 8B and Qwen 3.6 27B with thinking on, DeepSeek R1) keeps it on deliberately to measure what thinking costs and buys.
 
 ## Running LLMs on a 24 GB Mac: what I learned
@@ -209,32 +262,34 @@ One page with every test item, its expected answer and every model's answer (age
 - **Watch swap, not just "fits on GPU".** A 17 GB model showed `100% GPU` in Ollama, but still stalled for 40+ seconds per answer because macOS was swapping other processes out. The speed guard exists because of this.
 - **Big models need everything else out of the way.** The 16-18 GB models (Qwen 3.6/3.8 27B, Devstral, GLM 4.7 Flash) ran only with Docker fully quit, `iogpu.wired_limit_mb=22528` and LM Studio's loading guardrails turned off: LM Studio estimates the 27B vision models at ~21 GiB and refuses them even at a 4k context, though they actually leave ~25% of RAM free. Runs are saved locally and replayed into Langfuse afterwards (`kabench upload -m <model>`).
 - **LM Studio's guardrail labels differ from its config file.** The setting stored as `"high"` is shown as *Relaxed* in the app.
+- **Small traps.** LM Studio's API server stops when the app restarts (`lms server start`). Force-quitting Docker Desktop can lose container images; `docker compose up` then pulls the latest tag. Thinking models need a per-answer timeout above 5 minutes at ~10 tok/s.
+- **Langfuse v4 has no "delete dataset run" endpoint** (events-only mode). To replace runs, delete their traces through the experiments API; deletion is asynchronous and may need several passes.
 - **iCloud Drive breaks Python venvs.** If the project is inside an iCloud-synced Documents folder, iCloud marks `.venv/*.pth` as hidden and Python skips them (`ModuleNotFoundError`). Keep the venv in an excluded directory: `mkdir .venv.nosync && ln -s .venv.nosync .venv && uv sync`.
 
 ## Project layout
 
 ```
 configs/models.yaml           models: backend URL, model id, HF tokenizer, extra params
-data/                         grammar_{ka,en}.jsonl, agent_scenarios.jsonl
+data/                         grammar_{ka,en}.jsonl, agent_scenarios.jsonl, agent_long_scenarios.jsonl
 prompts/grammar/{ka,en}/      prompt variants (zero_shot, few_shot, ...)
 src/kabench/                  client, runner (+ speed guard), scorers, report, CLI
 src/kabench/tracks/           grammar, comprehension, tokens, agent (+ mock tool world)
 scripts/run_queue.sh          full benchmark, one model at a time
 scripts/make_ollama_aliases.sh  8k-context kb-* aliases for Ollama models
 docker/langfuse/              official Langfuse compose + local override
-results/                      runs/*.jsonl, tokens_*.csv, LEADERBOARD.md, charts/
-legacy/                       the original 2025 scripts this project grew from
+results/                      runs/*.jsonl, tokens_*.csv, LEADERBOARD.md, charts/, experiments/
 tests/                        unit tests
 ```
 
 ## Origin
 
-This started in 2025 as a few scripts that sent Georgian sentences to a local Qwen 2.5 model and printed the corrections to a Markdown table, to be checked by eye (see [`legacy/`](legacy/)). kabench turns that into a measured, reproducible benchmark: real scoring, parallel English baselines, multiple backends, tracing, and agent and tokenizer tracks.
+This started in 2025 as a few scripts that sent Georgian sentences to a local Qwen 2.5 model and printed the corrections to a Markdown table, to be checked by eye (still in the git history). kabench turns that into a measured, reproducible benchmark: real scoring, parallel English baselines, multiple backends, tracing, and agent and tokenizer tracks.
 
 ## Limitations and roadmap
 
 - The datasets are small (v1). The Georgian grammar labels have been reviewed by a native speaker (three unclear items dropped); the Georgian agent prompts have not.
 - The agent system prompt is English only.
 - Quantization formats differ between backends (GGUF Q4_K_M vs MLX 4-bit). Treat cross-backend comparisons with care.
-- Single runs at temperature 0: the 15 agent scenarios and ~20 already-correct grammar sentences are small samples, so small gaps are within noise (see the confidence intervals in the leaderboard).
-- Next: larger models on a rented GPU via vLLM, a Georgian system prompt for the agent, harder agent scenarios (the best model already scores 100%), and syncing the prompts into Langfuse prompt management.
+- Single runs at temperature 0: the 15 short and 10 long agent scenarios and the 20 already-correct grammar sentences are small samples, so small gaps are within noise (see the confidence intervals in the leaderboard).
+- The English-core comparison (direct vs no-copy vs translate-first) ran on 10 Belebele questions with two models; the conclusion is consistent across both, but the sample is small.
+- Next: larger models on a rented GPU via vLLM, a Georgian system prompt for the agent, more long agent scenarios (date reasoning and arithmetic are where the Georgian-only failures cluster), longer Georgian documents (the only case where a translation step might still pay), and syncing the prompts into Langfuse prompt management.

@@ -74,14 +74,16 @@ def grammar(models: Models, lang: Langs = "ka,en", variants: Annotated[str, type
 
 @app.command()
 def comprehension(models: Models, lang: Langs = "ka,en",
-                  n: Annotated[int, typer.Option(help="Belebele questions per language")] = 100):
+                  n: Annotated[int, typer.Option(help="Belebele questions per language")] = 100,
+                  mode: Annotated[str, typer.Option(help="direct, no-copy (don't quote/translate in thinking) "
+                                                         "or translate (translate once, then answer)")] = "direct"):
     """Track B: Belebele reading comprehension (same questions in both languages)."""
     from .tracks.comprehension import run_comprehension
 
     for spec in _prepare(models):
         for lg in _split(lang):
-            print(f"[comprehension] {spec.name} / {lg}")
-            run_comprehension(spec, lg, n)
+            print(f"[comprehension] {spec.name} / {lg} / {mode}")
+            run_comprehension(spec, lg, n, mode)
 
 
 @app.command()
@@ -101,14 +103,16 @@ def tokens(models: Annotated[str, typer.Option("--models", "-m", help="Also meas
 
 
 @app.command()
-def agent(models: Models, lang: Langs = "ka,en", limit: Limit = None):
+def agent(models: Models, lang: Langs = "ka,en", limit: Limit = None,
+          suite: Annotated[str, typer.Option(help="v1 (15 short scenarios) or long (multi-turn, Georgian-heavy "
+                                                  "tool results)")] = "v1"):
     """Track D: agent behaviour with mock tools."""
     from .tracks.agent import run_agent
 
     for spec in _prepare(models):
         for lg in _split(lang):
-            print(f"[agent] {spec.name} / {lg}")
-            run_agent(spec, lg, limit)
+            print(f"[agent] {spec.name} / {lg} / {suite}")
+            run_agent(spec, lg, limit, suite)
 
 
 @app.command("all")
