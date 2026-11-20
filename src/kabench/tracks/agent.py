@@ -44,6 +44,33 @@ def _tool_span(name: str, args):
     return nullcontext()
 
 
+HERMES_CALL_RE = re.compile(r"<tool_call>\s*(.*?)\s*</tool_call>", re.DOTALL)
+HERMES_TOOLS = ("\n\nYou can call functions to help with the user's request. The function signatures are within "
+                "<tools></tools> XML tags:\n<tools>\n{tools}\n</tools>\n\nFor each function call, return a JSON "
+                "object with the function name and arguments within <tool_call></tool_call> XML tags:\n<tool_call>\n"
+                '{{"name": <function-name>, "arguments": <args-json-object>}}\n</tool_call>\n\nFunction results '
+                "come back within <tool_response></tool_response> XML tags.")
+
+
+def _as_call(i: int, d: dict) -> dict:
+    args = d.get("arguments", d.get("parameters", {}))
+    return {"id": f"text-call-{i}", "type": "function",
+            "function": {"name": d["name"], "arguments": json.dumps(args, ensure_ascii=False)}}
+
+
+def hermes_tool_calls(text: str) -> list[dict]:
+    """All <tool_call>{...}</tool_call> blocks in a reply: the protocol for `tools_in_prompt` models."""
+    calls = []
+    for block in HERMES_CALL_RE.findall(text or ""):
+        try:
+            d = json.loads(block)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(d, dict) and isinstance(d.get("name"), str):
+            calls.append(_as_call(len(calls), d))
+    return calls
+
+
 def text_tool_calls(text: str) -> list[dict]:
     """Tool calls a model wrote as plain text instead of the API's tool_calls field
     (Granite's `<tool_call>[...]`, Llama's bare `{"name": ..., "parameters": ...}`).
@@ -55,10 +82,7 @@ def text_tool_calls(text: str) -> list[dict]:
     data = data if isinstance(data, list) else [data]
     if not data or not all(isinstance(d, dict) and isinstance(d.get("name"), str) for d in data):
         return []
-    return [{"id": f"text-call-{i}", "type": "function",
-             "function": {"name": d["name"], "arguments": json.dumps(d.get("arguments", d.get("parameters", {})),
-                                                                     ensure_ascii=False)}}
-            for i, d in enumerate(data)]
+    return [_as_call(i, d) for i, d in enumerate(data)]
 
 
 def run_episode(spec: ModelSpec, user_msgs: str | list[str], lang: str, suite: str = "v1") -> dict:
@@ -68,7 +92,12 @@ def run_episode(spec: ModelSpec, user_msgs: str | list[str], lang: str, suite: s
     _, tools, world_cls, _, _ = SUITES[suite]
     world = world_cls(lang)
     turns = [user_msgs] if isinstance(user_msgs, str) else user_msgs
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    in_prompt = spec.tools_in_prompt
+    system = SYSTEM_PROMPT
+    if in_prompt:
+        # Full {"type": "function", "function": {...}} objects, as in Hermes and Kona's function-calling data
+        system += HERMES_TOOLS.format(tools="\n".join(json.dumps(t, ensure_ascii=False) for t in tools))
+    messages = [{"role": "system", "content": system}]
     calls, replies, invalid, text_calls, prompt_tokens, completion_tokens = [], [], 0, 0, 0, 0
     error, stuck, steps = None, None, 0
     start = time.perf_counter()
@@ -77,7 +106,7 @@ def run_episode(spec: ModelSpec, user_msgs: str | list[str], lang: str, suite: s
         messages.append({"role": "user", "content": user_msg})
         for _ in range(MAX_STEPS):
             steps += 1
-            r = chat(spec, messages, tools=tools, name=f"agent-step-{steps}")
+            r = chat(spec, messages, tools=None if in_prompt else tools, name=f"agent-step-{steps}")
             if r.error and "error parsing tool call" in r.error:  # the server rejected a malformed tool call
                 invalid += 1
                 stuck = r.error
@@ -87,16 +116,27 @@ def run_episode(spec: ModelSpec, user_msgs: str | list[str], lang: str, suite: s
                 break
             prompt_tokens += r.prompt_tokens
             completion_tokens += r.completion_tokens
-            from_text = not r.tool_calls
-            tool_calls = text_tool_calls(r.text) if from_text else [tc.model_dump() for tc in r.tool_calls]
-            if from_text:
-                text_calls += len(tool_calls)
+            if in_prompt:  # <tool_call> blocks are the protocol here, not a fallback
+                from_text, tool_calls = False, hermes_tool_calls(r.text) or text_tool_calls(r.text)
+            else:
+                from_text = not r.tool_calls
+                tool_calls = text_tool_calls(r.text) if from_text else [tc.model_dump() for tc in r.tool_calls]
+                if from_text:
+                    text_calls += len(tool_calls)
+                # Mistral templates reject any tool-call id that is not exactly 9 alphanumerics, including the
+                # 32-character ids LM Studio generates itself; short sequential ids work for every template
+                for tc in tool_calls:
+                    tc["id"] = f"call{len(calls) + tool_calls.index(tc):05d}"
             if not tool_calls:
                 replies.append(r.text)
                 messages.append({"role": "assistant", "content": r.text})
                 break
 
-            messages.append({"role": "assistant", "content": "" if from_text else r.text, "tool_calls": tool_calls})
+            if in_prompt:
+                messages.append({"role": "assistant", "content": r.text})
+            else:
+                messages.append({"role": "assistant", "content": "" if from_text else r.text, "tool_calls": tool_calls})
+            responses = []
             for tc in tool_calls:
                 name, args = tc["function"]["name"], parse_args(tc["function"]["arguments"])
                 if args is None or name not in world.tool_names:
@@ -108,8 +148,13 @@ def run_episode(spec: ModelSpec, user_msgs: str | list[str], lang: str, suite: s
                         if span:
                             span.update(output=result)
                 calls.append({"tool": name, "args": args, "result": result, "turn": turn})
-                messages.append({"role": "tool", "tool_call_id": tc["id"],
-                                 "content": json.dumps(result, ensure_ascii=False)})
+                if in_prompt:
+                    responses.append(f"<tool_response>\n{json.dumps(result, ensure_ascii=False)}\n</tool_response>")
+                else:
+                    messages.append({"role": "tool", "tool_call_id": tc["id"],
+                                     "content": json.dumps(result, ensure_ascii=False)})
+            if responses:  # one user turn with every result keeps the roles alternating, as Mistral templates require
+                messages.append({"role": "user", "content": "\n".join(responses)})
         else:
             stuck = f"no reply after {MAX_STEPS} steps in turn {turn + 1}"
         if error or stuck:

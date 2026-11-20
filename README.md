@@ -13,14 +13,15 @@ It answers four questions:
 
 ## Key findings
 
-**17 open-weight models (3B to 30B), 22 configurations, ~9,500 graded answers**, all run locally on a 24 GB Mac.
+**21 open-weight models (3B to 30B), 26 configurations, ~11,500 graded answers**, all run locally on a 24 GB Mac.
 
 ![English vs Georgian average score per model](results/charts/overview.png)
 
-- **Every model is worse in Georgian, and English scores hide how much.** The same models average 71–97% in English but 10–85% in Georgian. LFM2 24B scores 87% in English and 10% in Georgian.
-- **Size is not the answer.** Gemma 4 E4B (4B) beats ten larger models in Georgian, and Gemma 4 26B is no better than the 12B. The best Georgian model, Qwen 3.6 27B, still trails its own English score by 12 points.
-- **Georgian costs 1.8–10× more tokens** for the same text, depending on the tokenizer: gpt-oss is cheapest, Llama 3.1 falls back to raw bytes.
+- **Every model is worse in Georgian, and English scores hide how much.** The general-purpose models average 70–97% in English but 10–85% in Georgian. LFM2 24B scores 87% in English and 10% in Georgian.
+- **Size is not the answer.** Gemma 4 E4B (4B) beats twelve larger models in Georgian, including the Georgian-specialised Kona2 12B, and Gemma 4 26B is no better than the 12B. The best Georgian model, Qwen 3.6 27B, still trails its own English score by 12 points.
+- **Georgian costs 1.1–10× more tokens** for the same text, depending on the tokenizer: Kona2's Georgian-extended vocabulary is near parity (1.09×), gpt-oss is the cheapest general model (1.8×), Llama 3.1 falls back to raw bytes (9.9×).
 - **Proofreading is the hardest skill.** The best zero-shot exact match in Georgian is 69%, against up to 97% in English. A coding model (Devstral) "fixed" 18 of the 20 Georgian sentences that were already correct (90%; with 20 such sentences, each one is 5 points).
+- **Georgian-first training trades English for Georgian.** [Kona2](https://huggingface.co/tbilisi-ai-lab) (Tbilisi AI Lab) is Mistral-Nemo 12B with ~20K Georgian tokens added and 30B tokens of further training. Against its parent: Georgian text costs **2.3× fewer tokens** (1.09× vs 2.40× the English count, the best tokenizer in the benchmark), Georgian Belebele rises from 65% to **77%**, and the Georgian–English gap shrinks from 27 to 9 points. But English drops sharply (grammar 85% → 50%, agents 80% → 60%), Georgian proofreading and tool use get worse, and in the long agent scenarios it invents tool names. The 3.8B Kona2-small lost more of its parent's English than it gained in Georgian.
 - **8-bit weights don't help Georgian.** There is no consistent gain from Q8: the Georgian average moved by −1.5 to −4.5 points and the English one by +1.7 to +2.9, all within noise.
 - **Thinking helps small models, and costs more in Georgian.** It raised Qwen3 8B's Georgian Belebele accuracy from 57% to 80%, but added only 2 of 30 questions for Qwen 3.6 27B, which used 1.6× as many thinking tokens per Georgian question as per English one. Both models already *think in English* about a Georgian question; the extra tokens go into quoting and translating the Georgian text to themselves.
 - **In agents, Georgian costs in writing, not reading.** On the long multi-step scenarios, the Georgian conversation context added only 0–6% per step for the strong models (the English system prompt and tools dominate), while writing Georgian replies took 1.0–2.8× the tokens, following the tokenizer: gpt-oss writes Georgian at the English cost, Qwen pays 1.7×. Every model completed 1–2 fewer of the 10 long scenarios in Georgian; the best, Qwen 3.6 27B, completed 7 vs 9.
@@ -51,7 +52,7 @@ On 10 Georgian Belebele questions with thinking on, all modes answered equally w
 - **Translate-first works but doesn't pay**: on its own translation the strong model thinks as briefly as on the English original, but the translation step costs what it saves. The small model (Qwen3 8B) still thought twice as long on its own imperfect translation as on the real English.
 - **In agents, reading Georgian is cheap and writing it is not** (see the long agent scenarios in [Results](#results)): a translation layer would save on the cheap part and cannot avoid the expensive one, since the Georgian reply has to be written anyway.
 
-**Recommended design:** English system prompt, tools, data and logs; normalised tool arguments (ids, ISO dates, currency codes); the model reads the customer's Georgian and writes its Georgian reply directly, with no translation layer. To cut the Georgian cost, choose a model with a Georgian-efficient tokenizer: gpt-oss writes Georgian at the English cost, Gemma at 1.2–1.4×, Qwen at 1.7–2.8×.
+**Recommended design:** English system prompt, tools, data and logs; normalised tool arguments (ids, ISO dates, currency codes); the model reads the customer's Georgian and writes its Georgian reply directly, with no translation layer. To cut the Georgian cost, choose a model with a Georgian-efficient tokenizer: gpt-oss writes Georgian at the English cost, Gemma at 1.2–1.4×, Qwen at 1.7–2.8×. A Georgian-extended vocabulary goes further (Kona2: 1.09× for text), but in the models tested so far it came with weaker tool use and English.
 
 The modes are available as `kabench comprehension --mode direct|no-copy|translate`.
 
@@ -65,15 +66,18 @@ The same 488 passages, tokenized in Georgian and in English (results: [`results/
 
 | Tokenizer | Georgian ÷ English tokens | Georgian chars per token |
 |---|---|---|
-| gpt-oss | **1.8×** | 3.04 |
+| **Kona2** (Georgian-first, 12B) | **1.09×** | 4.81 |
+| Kona2-small (Georgian-first, 3.8B) | 1.14× | 4.11 |
+| gpt-oss | 1.8× | 3.04 |
 | Gemma 3 | 2.3× | 2.32 |
 | Mistral Nemo | 2.4× | 2.18 |
 | DeepSeek-V3 | 4.0× | 1.37 |
+| Phi-3.5 | 4.9× | 0.96 |
 | Qwen3 | 5.3× | 1.01 |
 | Phi-4 | 9.9× | 0.55 |
 | Llama 3.1 | **9.9×** | 0.55 |
 
-With Llama 3.1, a Georgian user pays **almost 10× more** for the same content than an English user: in context window, latency and, on hosted APIs, money. At 0.55 characters per token, the tokenizer is falling back to raw bytes: each 3-byte Georgian letter costs about two tokens. Phi-4 and Llama 3.1 look identical for the same reason: they are different tokenizers built from the same OpenAI-style base, neither has Georgian in its vocabulary, so both fall back to bytes (466,938 vs 466,930 Georgian tokens).
+With Llama 3.1, a Georgian user pays **almost 10× more** for the same content than an English user: in context window, latency and, on hosted APIs, money. At 0.55 characters per token, the tokenizer is falling back to raw bytes: each 3-byte Georgian letter costs about two tokens. Kona2 shows the other end: adding ~20K Georgian tokens to Mistral-Nemo's vocabulary brings Georgian to near parity with English (4.81 vs 5.07 characters per token). Phi-4 and Llama 3.1 look identical for the byte-fallback reason: they are different tokenizers built from the same OpenAI-style base, neither has Georgian in its vocabulary, so both fall back to bytes (466,938 vs 466,930 Georgian tokens).
 
 ## What the benchmark catches
 
@@ -87,6 +91,8 @@ These are real behaviours from development runs (the full leaderboard is below):
 - **Reading, then stopping.** In the long Georgian scenarios, Qwen3 8B read the inbox or the note it was asked to act on, then pasted the content back to the user instead of sending the replies.
 - **Arithmetic that breaks only in Georgian.** Asked to split a dinner for three, Qwen 3.6 27B charged each friend 120 GEL (240 ÷ 2) in Georgian, and the correct 80 GEL in English.
 - **The wrong language.** The 2-bit Bonsai answered 79% of Georgian agent requests in English while still completing the task.
+- **Paraphrasing instead of proofreading.** Asked to fix only clear errors, Kona2 12B rewrote English sentences: "Forty apple were in the basket" became "**Thirty-nine** apples were in the basket", and "view" became "sight".
+- **Invented tools and invented actions.** In the long scenarios Kona2 12B called tools that don't exist (`find_events_with_rainy_days`); Kona2-small never called a tool at all and replied "Event created successfully" anyway.
 - **Dates.** In both languages, models took "Friday" or "Wednesday" as the past one, or computed "Monday" as today's date.
 
 ## Results
@@ -106,7 +112,9 @@ _Generated by `kabench report`._ Headline metric per track: grammar exact match 
 | gpt-oss-20b            |         0.97 |         0.31 |          0.99 |          0.77 |       0.87 |       0.80 |     0.63 |     0.94 |  0.32 |
 | qwen3-8b               |         0.85 |         0.51 |          0.90 |          0.57 |       0.80 |       0.73 |     0.60 |     0.85 |  0.25 |
 | qwen3-8b-q8            |         0.88 |         0.49 |          0.89 |          0.61 |       0.87 |       0.67 |     0.59 |     0.88 |  0.29 |
+| mistral-nemo-12b       |         0.85 |         0.44 |          0.91 |          0.65 |       0.80 |       0.67 |     0.59 |     0.85 |  0.27 |
 | devstral-small-2-24b   |         0.88 |         0.36 |          0.94 |          0.71 |       0.87 |       0.67 |     0.58 |     0.89 |  0.32 |
+| kona2-12b              |         0.50 |         0.36 |          0.84 |          0.77 |       0.60 |       0.53 |     0.55 |     0.65 |  0.09 |
 | ministral3-3b          |         0.53 |         0.14 |          0.80 |          0.57 |       0.87 |       0.67 |     0.46 |     0.73 |  0.27 |
 | llama3.1-8b            |         0.78 |         0.49 |          0.88 |          0.41 |       0.47 |       0.40 |     0.43 |     0.71 |  0.27 |
 | bonsai-27b-2bit        |         0.97 |         0.17 |          0.98 |          0.48 |       0.80 |       0.60 |     0.42 |     0.92 |  0.50 |
@@ -116,7 +124,9 @@ _Generated by `kabench report`._ Headline metric per track: grammar exact match 
 | nemotron3-nano-4b      |         0.75 |         0.03 |          0.90 |          0.40 |       0.73 |       0.40 |     0.28 |     0.79 |  0.52 |
 | deepseek-r1-qwen3-8b ✱ |         0.73 |         0.04 |          0.80 |          0.30 |       0.87 |       0.33 |     0.22 |     0.80 |  0.58 |
 | granite3.2-8b          |         0.72 |         0.00 |          0.86 |          0.29 |       0.60 |       0.27 |     0.19 |     0.73 |  0.54 |
+| phi3.5-mini            |         0.93 |         0.00 |          0.84 |          0.25 |       0.33 |       0.13 |     0.13 |     0.70 |  0.57 |
 | lfm2-24b-a2b           |         0.82 |         0.00 |          0.86 |          0.16 |       0.93 |       0.13 |     0.10 |     0.87 |  0.78 |
+| kona2-small-3.8b       |         0.72 |         0.00 |          0.45 |          0.16 |       0.20 |       0.07 |     0.08 |     0.46 |  0.38 |
 
 Per-track tables with 95% confidence intervals, over-correction rates, the Q4 vs Q8 comparison, the reasoning subset, agent results by scenario type and token cost on each backend: **[results/LEADERBOARD.md](results/LEADERBOARD.md)**. To read every answer, run `uv run kabench review`.
 
@@ -124,13 +134,17 @@ Per-track tables with 95% confidence intervals, over-correction rates, the Q4 vs
 
 10 scenarios per language (`data/agent_long_scenarios.jsonl`): inbox, calendar, notes and forecast tools whose results are Georgian in the Georgian runs, and 3 scripted multi-turn conversations (confirm before paying, ask which Nino, then act). Run with `kabench agent --suite long`. `context Δ` = extra prompt tokens per step in Georgian (reading); `generated ×` = Georgian vs English tokens written per scenario (writing).
 
-| model          |   success ka |   success en | context Δ   | generated ×   |   seconds ka |   seconds en |
-|:---------------|-------------:|-------------:|:------------|:--------------|-------------:|-------------:|
-| qwen3.6-27b    |         0.70 |         0.90 | +6%         | 1.7×          |           34 |           21 |
-| gemma4-26b-qat |         0.60 |         0.80 | +3%         | 1.4×          |            6 |            4 |
-| gemma4-12b-qat |         0.50 |         0.60 | +0%         | 1.2×          |            9 |            7 |
-| gpt-oss-20b    |         0.50 |         0.60 | -2%         | 1.0×          |            5 |            5 |
-| qwen3-8b       |         0.20 |         0.30 | +14%        | 2.8×          |           11 |            4 |
+| model            |   success ka |   success en | context Δ   | generated ×   |   seconds ka |   seconds en |
+|:-----------------|-------------:|-------------:|:------------|:--------------|-------------:|-------------:|
+| qwen3.6-27b      |         0.70 |         0.90 | +6%         | 1.7×          |           34 |           21 |
+| gemma4-26b-qat   |         0.60 |         0.80 | +3%         | 1.4×          |            6 |            4 |
+| gemma4-12b-qat   |         0.50 |         0.60 | +0%         | 1.2×          |            9 |            7 |
+| gpt-oss-20b      |         0.50 |         0.60 | -2%         | 1.0×          |            5 |            5 |
+| mistral-nemo-12b |         0.20 |         0.70 | -6%         | 0.7×          |           12 |           18 |
+| qwen3-8b         |         0.20 |         0.30 | +14%        | 2.8×          |           11 |            4 |
+| kona2-12b        |         0.00 |         0.10 | -30%        | 0.3×          |            7 |           23 |
+| phi3.5-mini      |         0.00 |         0.10 | -20%        | 0.6×          |           20 |           35 |
+| kona2-small-3.8b |         0.00 |         0.00 | -1%         | 0.6×          |            2 |            2 |
 
 <!-- leaderboard:end -->
 
@@ -155,6 +169,10 @@ Everything runs on a **24 GB Apple Silicon Mac**, at 4-bit unless noted:
 | Devstral Small 2 | LM Studio | 24B | big model, coding-focused |
 | GLM 4.7 Flash | LM Studio | 30B MoE (3B active) | big model, run at 4k context |
 | Gemma 4 26B A4B QAT | LM Studio | 26B MoE (4B active) | big model, quantization-aware trained |
+| Kona2 12B | LM Studio | 12B | Georgian-first ([Tbilisi AI Lab](https://huggingface.co/tbilisi-ai-lab)): Mistral-Nemo + Georgian vocabulary and training, SFT, DPO; Q4_K_S |
+| Mistral-Nemo 12B Instruct | LM Studio | 12B | Kona2 12B's parent; Q4_K_M (the closest build with working tool calls) |
+| Kona2-small 3.8B | LM Studio | 3.8B | Georgian-first, built on Phi-3.5-mini; Q4_K_S |
+| Phi-3.5-mini | LM Studio | 3.8B | Kona2-small's parent; Q4_K_S |
 
 **Reasoning group**, run on a fixed subset (30 grammar + 30 Belebele items per language, all agent scenarios): Qwen3 8B with thinking on, and DeepSeek R1 0528 (Qwen3 8B distill). Qwen 3.6 27B with thinking on ran Belebele only (30 questions per language): at ~10 tok/s, a 4k-token thinking budget makes grammar and agent runs take many hours. Phi-4 mini reasoning and Phi-4 reasoning plus are opt-in: the mini model thinks in loops on Georgian until it runs out of tokens.
 
@@ -249,6 +267,7 @@ One page with every test item, its expected answer and every model's answer (age
 - **Test-set leakage is guarded against.** The original few-shot prompt used test sentences as examples. Those items are excluded automatically when that prompt is evaluated.
 - **Deterministic agent scoring, no LLM-as-judge.** The checks cover tool choice, arguments (with per-language expectations: a Georgian event title must stay Georgian), forbidden side effects, clarification questions and reply language. Clarification and safety scenarios fail if the model takes *any* side-effecting action.
 - **Morphology-aware mock tools.** Contact search tolerates Georgian case suffixes (`გიორგის` → `გიორგი`), so failures reflect the model, not a naive search tool.
+- **Tools reach every model.** LM Studio silently drops tool definitions when a GGUF's chat template has no tool support (the prompt is the same size with and without tools); Kona2's official template is plain ChatML. For such models (`tools_in_prompt: true` in `configs/models.yaml`) the tools go into the system prompt in Hermes format and `<tool_call>` blocks are read from the reply. Tool-call ids are renumbered to 9 characters, because Mistral templates reject anything else, including the 32-character ids LM Studio itself generates.
 - **Tool-call format is not the test.** Some models emit calls in their own dialect: Granite writes `<tool_call>[…]` as plain text, Aya wraps arguments in `{"tool_name": …, "parameters": {…}}`. The harness accepts both, but only when the reply is nothing but well-formed calls. The `text_tool_calls` column shows how often a model needed this.
 - **Safety scenarios** include a large-transfer confirmation rule, a prompt injection hidden in a tool result, and in the long suite a fake bank message in the inbox that asks the assistant to transfer money.
 - **Failures are counted, not hidden.** An agent that loops to the step limit without replying, or sends a tool call the server cannot parse, fails the scenario instead of being left out of the average. A clarifying reply counts as asking even without a question mark ("გთხოვთ, დამიდასტურეთ", "please confirm").
@@ -290,6 +309,7 @@ This started in 2025 as a few scripts that sent Georgian sentences to a local Qw
 - The datasets are small (v1). The Georgian grammar labels have been reviewed by a native speaker (three unclear items dropped); the Georgian agent prompts have not.
 - The agent system prompt is English only.
 - Quantization formats differ between backends (GGUF Q4_K_M vs MLX 4-bit). Treat cross-backend comparisons with care.
+- Kona2 vs its parent: Kona2 is Q4_K_S, Mistral-Nemo Q4_K_M (the closest build with working tool calls; slightly higher quality, if anything favouring the parent). Kona2's official chat template has no tool support, so its tools were passed in the system prompt in the Hermes format its card shows, while the parent used native tool calling; part of Kona2's weak tool use may be a format mismatch.
 - Single runs at temperature 0: the 15 short and 10 long agent scenarios and the 20 already-correct grammar sentences are small samples, so small gaps are within noise (see the confidence intervals in the leaderboard).
 - The English-core comparison (direct vs no-copy vs translate-first) ran on 10 Belebele questions with two models; the conclusion is consistent across both, but the sample is small.
-- Next: larger models on a rented GPU via vLLM, a Georgian system prompt for the agent, more long agent scenarios (date reasoning and arithmetic are where the Georgian-only failures cluster), longer Georgian documents (the only case where a translation step might still pay), and syncing the prompts into Langfuse prompt management.
+- Next: whether Georgian-first training can keep the parent's English and tool use (Kona2's tokenizer is the part worth having), larger models on a rented GPU via vLLM, a Georgian system prompt for the agent, more long agent scenarios (date reasoning and arithmetic are where the Georgian-only failures cluster), longer Georgian documents (the only case where a translation step might still pay), and syncing the prompts into Langfuse prompt management.

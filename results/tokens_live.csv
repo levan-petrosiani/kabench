@@ -1,10 +1,14 @@
 tokenizer,ka_tokens,ka_tokens_per_word,ka_chars_per_token,en_tokens,en_tokens_per_word,en_chars_per_token,ka_en_ratio,model_id
+kona2-small-3.8b,6698,1.764,4.834,6601,1.355,4.555,1.015,mradermacher/kona2-small-3.8b
+kona2-12b,6450,1.698,5.020,5930,1.218,5.070,1.088,kona2-12b
 gpt-oss-20b,10386,2.735,3.118,5822,1.195,5.164,1.784,kb-gpt-oss-20b
 gemma4-26b-qat,13590,3.578,2.383,5821,1.195,5.165,2.335,google/gemma-4-26b-a4b-qat
 gemma4-12b-qat,13590,3.578,2.383,5821,1.195,5.165,2.335,google/gemma-4-12b-qat
 devstral-small-2-24b,14851,3.910,2.180,6050,1.242,4.969,2.455,mistralai/devstral-small-2-2512
-nemotron3-nano-4b,14731,3.879,2.198,5930,1.218,5.070,2.484,nvidia/nemotron-3-nano-4b
 ministral3-3b,14731,3.879,2.198,5930,1.218,5.070,2.484,mistralai/ministral-3-3b
+mistral-nemo-12b,14731,3.879,2.198,5930,1.218,5.070,2.484,mistral-nemo-instruct-2407
+nemotron3-nano-4b,14731,3.879,2.198,5930,1.218,5.070,2.484,nvidia/nemotron-3-nano-4b
+phi3.5-mini,33793,8.898,0.958,6601,1.355,4.555,5.119,phi-3.5-mini-instruct@q4_k_s
 deepseek-r1-qwen3-8b,32398,8.530,0.999,5974,1.227,5.033,5.423,deepseek/deepseek-r1-0528-qwen3-8b
 qwen3-8b,32338,8.514,1.001,5914,1.214,5.084,5.468,kb-qwen3-8b
 glm4.7-flash,32243,8.489,1.004,5857,1.203,5.133,5.505,zai-org/glm-4.7-flash

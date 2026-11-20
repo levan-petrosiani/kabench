@@ -78,6 +78,34 @@ models:
     base_url: http://localhost:1234/v1
     model_id: mistralai/ministral-3-3b
 
+  # Georgian-first models from Tbilisi AI Lab, each next to the model it was trained from
+  kona2-12b:  # Mistral-Nemo 12B + ~20K Georgian tokens + 30B tokens of Georgian/English, SFT, DPO
+    provider: lmstudio
+    base_url: http://localhost:1234/v1
+    model_id: kona2-12b
+    tools_in_prompt: true  # Kona's chat template has no tool support: Hermes-format tools in the system prompt
+    hf_tokenizer: tbilisi-ai-lab/kona2-12B
+
+  mistral-nemo-12b:  # Kona2 12B's parent (instruct version); lmstudio-community Q4_K_M, native tool calling
+    provider: lmstudio
+    base_url: http://localhost:1234/v1
+    model_id: mistral-nemo-instruct-2407
+    hf_tokenizer: unsloth/Mistral-Nemo-Instruct-2407
+
+  kona2-small-3.8b:  # Phi-3.5-mini + Georgian vocabulary and training; mradermacher Q4_K_S
+    provider: lmstudio
+    base_url: http://localhost:1234/v1
+    model_id: mradermacher/kona2-small-3.8b
+    tools_in_prompt: true  # template has no tool support (LM Studio drops the tools)
+    hf_tokenizer: tbilisi-ai-lab/kona2-small-3.8B
+
+  phi3.5-mini:  # Kona2-small's parent
+    provider: lmstudio
+    base_url: http://localhost:1234/v1
+    model_id: phi-3.5-mini-instruct@q4_k_s
+    tools_in_prompt: true  # template has no tool support (LM Studio drops the tools)
+    hf_tokenizer: microsoft/Phi-3.5-mini-instruct
+
   gemma4-e4b:
     provider: lmstudio
     base_url: http://localhost:1234/v1
@@ -198,3 +226,6 @@ tokenizers:
   phi4: microsoft/phi-4
   deepseek-v3: deepseek-ai/DeepSeek-V3
   gpt-oss: openai/gpt-oss-20b
+  kona2: tbilisi-ai-lab/kona2-12B
+  kona2-small: tbilisi-ai-lab/kona2-small-3.8B
+  phi3.5: microsoft/Phi-3.5-mini-instruct

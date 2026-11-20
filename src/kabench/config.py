@@ -26,6 +26,9 @@ class ModelSpec(BaseModel):
     temperature: float = 0.0
     max_tokens: int = 1024
     extra_body: dict = {}
+    # The server's chat template drops tool definitions (prompt tokens are the same with and without tools):
+    # describe the tools in the system prompt in Hermes format and read <tool_call> blocks from the reply instead
+    tools_in_prompt: bool = False
 
 
 def _load_yaml() -> dict:

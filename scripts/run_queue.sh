@@ -57,6 +57,11 @@ QUEUE=(
   "glm4.7-flash|lmstudio|zai-org/glm-4.7-flash|full|optin,ctx=4096"  # 8k leaves ~4% RAM free
   "gemma4-26b-qat|lmstudio|google/gemma-4-26b-a4b-qat|full|optin"
   "qwen3.6-27b-think|lmstudio|qwen/qwen3.6-27b|reasoning|optin"
+  # Georgian-first Kona2 models (Tbilisi AI Lab) and the models they were trained from
+  "kona2-12b|lmstudio|kona2-12b|full|optin"
+  "mistral-nemo-12b|lmstudio|mistral-nemo-instruct-2407|full|optin"
+  "kona2-small-3.8b|lmstudio|mradermacher/kona2-small-3.8b|full|optin"
+  "phi3.5-mini|lmstudio|phi-3.5-mini-instruct@q4_k_s|full|optin"
 )
 
 RUN_DEADLINE=$(( $(date +%s) + 10 * 3600 ))

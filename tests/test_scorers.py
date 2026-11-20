@@ -223,3 +223,15 @@ def test_stuck_agent_counts_as_failure():
            "stuck": "no reply after 8 steps in turn 1", "error": None}
     s = agent_score(output=out, expected_output={"no_side_effects": True}, metadata={"lang": "ka"})
     assert s["success"] is False and s["replied_ok"] is False
+
+
+def test_hermes_tool_calls():
+    from kabench.tracks.agent import hermes_tool_calls
+    from kabench.tracks.agent_world import parse_args
+
+    reply = ('Let me check.\n<tool_call>\n{"name": "get_weather", "arguments": {"city": "ბათუმი"}}\n</tool_call>\n'
+             '<tool_call>{"name": "get_weather", "arguments": {"city": "Tbilisi"}}</tool_call>')
+    calls = hermes_tool_calls(reply)
+    assert [parse_args(c["function"]["arguments"])["city"] for c in calls] == ["ბათუმი", "Tbilisi"]
+    assert hermes_tool_calls("<tool_call>not json</tool_call>") == []
+    assert hermes_tool_calls("The weather in Batumi is cloudy.") == []
